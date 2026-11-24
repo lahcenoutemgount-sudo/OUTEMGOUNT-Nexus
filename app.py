@@ -599,7 +599,16 @@ for tf_name, tf_sig in tf_signals(eff_yahoo, eff_oanda):
         f"<div class='tf-sig' style='color:{chip_color}'>{tf_sig or '—'}</div></div>"
     )
 st.markdown(f"<div class='tf-row'>{chips}</div>", unsafe_allow_html=True)
-st.caption("ℹ️ كل فريم (5m / 15m / 30m / 1h) عندو صفقتو الخاصة. اختار الفريم من القائمة فوق باش تشوف خطة الصفقة ديالو.")
+st.markdown(
+    "<div style='direction:rtl;text-align:center;background:rgba(94,208,255,.08);"
+    "border:1px solid #5ed0ff;border-radius:10px;padding:12px 14px;margin:6px 0 4px;"
+    "line-height:1.9;font-size:14px;color:#9fe3ff'>"
+    "<span style='color:#e8c76a;font-weight:800'>💡 كل فريم عندو صفقتو الخاصة</span><br>"
+    "<bdi style='direction:ltr;font-weight:700;color:#5ed0ff'>5m · 15m · 30m · 1h</bdi><br>"
+    "اختار الفريم من القائمة فوق باش تشوف خطة الصفقة ديالو"
+    "</div>",
+    unsafe_allow_html=True
+)
 
 st.markdown("---")
 
