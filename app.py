@@ -151,10 +151,14 @@ ASSETS = {
     "NASDAQ 100": "^NDX",
 }
 TF_SETTINGS = {
+    "1m": ("1m", "5d"),
+    "5m": ("5m", "5d"),
     "15m": ("15m", "5d"),
+    "30m": ("30m", "1mo"),
     "1h": ("1h", "1mo"),
     "4h": ("1h", "3mo"),
     "1d": ("1d", "1y"),
+    "1w": ("1wk", "5y"),
 }
 
 @st.cache_data(ttl=60)
@@ -278,7 +282,6 @@ def render_chart(d, side="WAIT", t0=None,
             "position": "belowBar" if side == "LONG" else "aboveBar",
             "color": "#b6f23a",
             "shape": "arrowUp" if side == "LONG" else "arrowDown",
-            "text": "MA5×13",
         }
 
     lines = [
@@ -369,7 +372,7 @@ sel1, sel2, sel3 = st.columns([3, 2, 1.4])
 with sel1:
     asset_name = st.selectbox("Market", list(ASSETS.keys()))
 with sel2:
-    timeframe = st.selectbox("Timeframe", list(TF_SETTINGS.keys()), index=0)
+    timeframe = st.selectbox("Timeframe", list(TF_SETTINGS.keys()), index=list(TF_SETTINGS.keys()).index("15m"))
 with sel3:
     st.markdown("<div style='height:28px'></div>", unsafe_allow_html=True)
     if st.button("↻ Refresh", use_container_width=True):
@@ -449,7 +452,7 @@ st.markdown("---")
 
 # ------------------------- FEATURED TRADE SETUP -------------------------
 
-st.markdown("## 🎯 Featured trade setup")
+st.markdown("<h2 style='white-space:nowrap;font-size:clamp(18px,5vw,26px);margin:0 0 6px 0'>🎯 Trade Plan</h2>", unsafe_allow_html=True)
 
 signal_class = "buy" if signal in ("BUY", "BULLISH") else (
     "sell" if signal in ("SELL", "BEARISH") else "wait"
@@ -532,7 +535,7 @@ with tab_journal:
     trades = get_trades()
 
     if trades.empty:
-        st.info("Your journal is empty. Save a setup from the featured trade setup above.")
+        st.info("Your journal is empty. Save a setup from the Trade Plan above.")
     else:
         open_trades = trades[trades["status"].isin(["Planned", "Open"])]
         st.markdown(f"**Active / planned setups: {len(open_trades)}**")
