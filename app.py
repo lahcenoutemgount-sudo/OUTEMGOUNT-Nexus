@@ -65,6 +65,11 @@ hr { border-color:#1b2736 !important; }
     letter-spacing:1px; font-size:11px; }
 [data-testid="stMetricValue"] { color:#eef3f9 !important; }
 
+.stat-card { background:#101826; border:1px solid #1e2b3c; border-left:3px solid #c9a54b;
+    border-radius:10px; padding:12px 14px; margin-bottom:10px; }
+.stat-label { color:#8ea0b5; text-transform:uppercase; letter-spacing:1px; font-size:11px; }
+.stat-value { font-size:1.6rem; font-weight:700; margin-top:4px; }
+
 .tf-row { display:flex; gap:8px; margin:6px 0 8px; }
 .tf-chip { flex:1; background:#101826; border:1px solid #1e2b3c; border-radius:8px;
     padding:9px 6px; text-align:center; }
@@ -96,6 +101,29 @@ def fmt(v, digits=4):
     if v is None or pd.isna(v):
         return "—"
     return f"{float(v):,.{digits}f}"
+
+GREEN, RED, GOLD = "#2fbf8f", "#e5646c", "#e8c76a"
+TREND_AR = {
+    "STRONG UPTREND": ("اتجاه صعودي قوي", GREEN),
+    "STRONG DOWNTREND": ("اتجاه هبوطي قوي", RED),
+    "BULLISH": ("اتجاه صعودي", GREEN),
+    "BEARISH": ("اتجاه هبوطي", RED),
+    "SIDEWAYS": ("اتجاه عرضي", GOLD),
+}
+SIGNAL_AR = {
+    "BUY": ("إشارة شراء", GREEN),
+    "SELL": ("إشارة بيع", RED),
+    "BULLISH": ("شراء", GREEN),
+    "BEARISH": ("بيع", RED),
+    "NEUTRAL": ("انتظار", GOLD),
+}
+
+
+def stat_card(label, text, color):
+    return (
+        f"<div class='stat-card'><div class='stat-label'>{label}</div>"
+        f"<div class='stat-value' style='color:{color}'>{text}</div></div>"
+    )
 
 # ------------------------- DATABASE -------------------------
 
@@ -442,6 +470,21 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
+components.html("""
+<div id="utc" style="font:600 12px Inter,Arial,sans-serif;letter-spacing:1.4px;
+     color:#8ea0b5;text-align:center;padding-top:4px"></div>
+<script>
+function tick(){
+  const n = new Date(), p = x => String(x).padStart(2,'0');
+  document.getElementById('utc').innerHTML =
+    '🌐 UTC · <span style="color:#e8c76a;font-weight:800">' +
+    p(n.getUTCHours()) + ':' + p(n.getUTCMinutes()) + ':' + p(n.getUTCSeconds()) +
+    '</span> · ' + n.toISOString().slice(0,10);
+}
+tick(); setInterval(tick, 1000);
+</script>
+""", height=30)
+
 # ------------------------- MARKET SELECTOR (under the title) -------------------------
 
 sel1, sel2, sel3 = st.columns([3, 2, 1.4])
@@ -569,8 +612,10 @@ if feed_err:
 
 m1, m2, m3 = st.columns(3)
 m1.metric("LAST PRICE", f"{price:,.4f}", delta=f"{chg_pct:+.2f}% last candle")
-m2.metric("MARKET TREND", trend)
-m3.metric("CURRENT BIAS", signal)
+trend_txt, trend_col = TREND_AR.get(trend, (trend, GOLD))
+sig_txt, sig_col = SIGNAL_AR.get(signal, (signal, GOLD))
+m2.markdown(stat_card("MARKET TREND", trend_txt, trend_col), unsafe_allow_html=True)
+m3.markdown(stat_card("CURRENT BIAS", sig_txt, sig_col), unsafe_allow_html=True)
 
 BAR_MIN = {"5m": 5, "15m": 15, "30m": 30, "1h": 60}
 last_ts = pd.Timestamp(data.index[-1])
@@ -588,15 +633,13 @@ st.markdown("---")
 # ------------------------- SIGNALS BY TIMEFRAME -------------------------
 
 st.markdown("<div class='section-title'>Signals by timeframe</div>", unsafe_allow_html=True)
-SIG_COLOR = {"BUY": "#2fbf8f", "BULLISH": "#2fbf8f", "SELL": "#e5646c",
-             "BEARISH": "#e5646c", "NEUTRAL": "#e8c76a"}
 chips = ""
 for tf_name, tf_sig in tf_signals(eff_yahoo, eff_oanda):
-    chip_color = SIG_COLOR.get(tf_sig, "#8ea0b5")
+    chip_txt, chip_color = SIGNAL_AR.get(tf_sig, ("—", "#8ea0b5"))
     active = " active" if tf_name == timeframe else ""
     chips += (
         f"<div class='tf-chip{active}'><div class='tf-name'>{tf_name}</div>"
-        f"<div class='tf-sig' style='color:{chip_color}'>{tf_sig or '—'}</div></div>"
+        f"<div class='tf-sig' style='color:{chip_color}'>{chip_txt}</div></div>"
     )
 st.markdown(f"<div class='tf-row'>{chips}</div>", unsafe_allow_html=True)
 st.markdown(
@@ -622,8 +665,8 @@ signal_class = "buy" if signal in ("BUY", "BULLISH") else (
 st.markdown(
     f"<div class='trade-card'>"
     f"<div class='trade-label'>LIVE TECHNICAL SETUP · {asset_name} · {timeframe}</div>"
-    f"<div class='{signal_class}' style='font-size:30px;margin:5px 0'>{signal}</div>"
-    f"<div class='small-note'>Market direction: {trend} &nbsp; · &nbsp; "
+    f"<div class='{signal_class}' style='font-size:30px;margin:5px 0'>{sig_txt}</div>"
+    f"<div class='small-note'>Market direction: <span style='color:{trend_col};font-weight:700'>{trend_txt}</span> &nbsp; · &nbsp; "
     f"Setup status: {'Directional setup' if side != 'WAIT' else 'Waiting for confirmation'}</div>"
     f"</div>",
     unsafe_allow_html=True
@@ -632,7 +675,7 @@ st.markdown(
 if side != "WAIT":
     trade_cols = st.columns(5)
     trade_values = [
-        ("DIRECTION", side, "#f0c75e"),
+        ("DIRECTION", "شراء" if side == "LONG" else "بيع", GREEN if side == "LONG" else RED),
         ("ENTRY PRICE", fmt(entry), "#b6f23a"),
         ("STOP LOSS", fmt(sl), "#ff747c"),
         ("TAKE PROFIT 1", fmt(tp1), "#46d6a5"),
@@ -723,9 +766,11 @@ with tab_overview:
              ("Overbought zone" if rsi >= 70 else "Oversold zone" if rsi <= 30 else "Neutral zone")
     )
     st.caption("ATR-based levels are analytical estimates, not guaranteed execution prices.")
+    _lc = pd.Timestamp(data.index[-1])
+    _lc = _lc.tz_localize("UTC") if _lc.tzinfo is None else _lc.tz_convert("UTC")
     st.caption(
-        f"Last candle: {data.index[-1]} · "
-        f"Updated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+        f"Last candle: {_lc.strftime('%Y-%m-%d %H:%M')} UTC · "
+        f"Updated: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S')} UTC"
     )
 
 with tab_journal:
