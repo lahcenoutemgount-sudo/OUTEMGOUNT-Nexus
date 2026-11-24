@@ -16,7 +16,7 @@ st.set_page_config(
     page_title="OUTEMGOUNT MA NEXUS",
     page_icon="📈",
     layout="wide",
-    initial_sidebar_state="expanded",
+    initial_sidebar_state="collapsed",
 )
 
 DB_PATH = "nexus_trades.db"
@@ -29,6 +29,7 @@ st.markdown("""
 html, body, [class*="css"] { font-family: Inter, sans-serif; }
 .stApp { background: #080e16; color: #e7edf5; }
 .block-container { padding-top: 1.2rem; padding-bottom: 2rem; max-width: 1600px; }
+[data-testid="stSidebar"], [data-testid="collapsedControl"] { display: none; }
 h1,h2,h3 { color: #f0c75e !important; letter-spacing: .2px; }
 [data-testid="stMetric"] {
     background: linear-gradient(145deg,#121e2b,#0e1722);
@@ -39,7 +40,7 @@ h1,h2,h3 { color: #f0c75e !important; letter-spacing: .2px; }
 .nexus-header {
     background: linear-gradient(110deg,#111d2b,#182638 60%,#111923);
     border: 1px solid #34465a; border-radius: 18px;
-    padding: 22px 24px; margin-bottom: 15px;
+    padding: 22px 24px; margin-bottom: 12px;
 }
 .nexus-kicker { color:#9bacc0; font-size:12px; letter-spacing:2px; font-weight:700; }
 .nexus-title { color:#f0c75e; font-size:30px; font-weight:800; margin:3px 0; }
@@ -47,15 +48,10 @@ h1,h2,h3 { color: #f0c75e !important; letter-spacing: .2px; }
 .trade-card {
     background: linear-gradient(145deg,#142131,#101923);
     border:1px solid #2a3d52; border-radius:15px; padding:16px;
-    margin: 5px 0 12px 0;
+    margin: 5px 0 12px 0; box-shadow: 0 8px 24px rgba(0,0,0,.18);
 }
-.trade-label { color:#91a5ba; font-size:11px; letter-spacing:1.2px; font-weight:700; }
+.trade-label { color:#a9bfd3; font-size:11px; letter-spacing:1.2px; font-weight:700; }
 .trade-number { color:#65c7f2; font-size:21px; font-weight:800; margin-top:3px; }
-.trade-card .trade-label { color:#a9bfd3; }
-.trade-card { box-shadow: 0 8px 24px rgba(0,0,0,.18); }
-.trade-card .buy { color:#46d6a5 !important; }
-.trade-card .sell { color:#ff747c !important; }
-
 .buy { color:#35c69a !important; font-weight:800; }
 .sell { color:#ff6b72 !important; font-weight:800; }
 .wait { color:#f0c75e !important; font-weight:800; }
@@ -64,6 +60,14 @@ hr { border-color:#26384b !important; }
 .stButton>button { border-radius:10px; font-weight:700; }
 </style>
 """, unsafe_allow_html=True)
+
+# ------------------------- HELPERS -------------------------
+
+def fmt(v, digits=4):
+    """Safe number formatting (handles None / NaN)."""
+    if v is None or pd.isna(v):
+        return "—"
+    return f"{float(v):,.{digits}f}"
 
 # ------------------------- DATABASE -------------------------
 
@@ -194,11 +198,7 @@ def add_indicators(df):
     ], axis=1).max(axis=1)
     d["ATR"] = tr.ewm(alpha=1/14, min_periods=14, adjust=False).mean()
 
-    d["Kijun"] = (
-        d["High"].rolling(26).max() + d["Low"].rolling(26).min()
-    ) / 2
-
-    return d.dropna(subset=["MA5", "MA13", "MA20", "MA50", "ATR", "Kijun"])
+    return d.dropna(subset=["MA5", "MA13", "MA20", "MA50", "ATR"])
 
 def analyze(d):
     last, prev = d.iloc[-1], d.iloc[-2]
@@ -231,11 +231,9 @@ def analyze(d):
 
 # ------------------------- CHART -------------------------
 
-def render_chart(d, show_kijun=True,
-                 entry=None, sl=None, tp1=None, tp2=None, tp3=None):
+def render_chart(d, entry=None, sl=None, tp1=None, tp2=None, tp3=None):
     chart_df = d.tail(300)
     candles, volumes = [], []
-    lines = {"kijun": []}
 
     for ts, row in chart_df.iterrows():
         t = int(pd.Timestamp(ts).timestamp())
@@ -250,12 +248,9 @@ def render_chart(d, show_kijun=True,
             "color": "rgba(53,198,154,.42)" if row["Close"] >= row["Open"]
                      else "rgba(255,107,114,.42)"
         })
-        if pd.notna(row["Kijun"]):
-            lines["kijun"].append({"time": t, "value": float(row["Kijun"])})
 
     payload = {
-        "candles": candles, "volumes": volumes, **lines,
-        "visible": {"kijun": show_kijun},
+        "candles": candles, "volumes": volumes,
         "levels": [
             {"price": float(v), "color": c, "title": label, "style": style}
             for v, c, label, style in [
@@ -271,7 +266,7 @@ def render_chart(d, show_kijun=True,
     chart_json = json.dumps(payload, allow_nan=False)
     html = """
     <div id="nexus-chart" style="width:100%;height:590px;"></div>
-    <script src="https://unpkg.com/lightweight-charts/dist/lightweight-charts.standalone.production.js"></script>
+    <script src="https://unpkg.com/lightweight-charts@5.0.0/dist/lightweight-charts.standalone.production.js"></script>
     <script>
     const d = """ + chart_json + """;
     const el = document.getElementById('nexus-chart');
@@ -294,15 +289,6 @@ def render_chart(d, show_kijun=True,
         wickUpColor: '#35c69a', wickDownColor: '#ff6b72'
       });
       cs.setData(d.candles);
-
-      function addLine(key, color, title) {
-        const s = chart.addSeries(LightweightCharts.LineSeries, {
-          color, lineWidth: 2, title, visible: d.visible[key],
-          priceLineVisible: false, lastValueVisible: true
-        });
-        s.setData(d[key]);
-      }
-      addLine('kijun', '#ff9966', 'Kijun Sen');
 
       const vs = chart.addSeries(LightweightCharts.HistogramSeries, {
         priceFormat: { type: 'volume' }, priceScaleId: ''
@@ -334,16 +320,18 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
-with st.sidebar:
-    st.markdown("## ⚙️ Workspace")
+# ------------------------- MARKET SELECTOR (under the title) -------------------------
+
+sel1, sel2, sel3 = st.columns([3, 2, 1.4])
+with sel1:
     asset_name = st.selectbox("Market", list(ASSETS.keys()))
+with sel2:
     timeframe = st.selectbox("Timeframe", list(TF_SETTINGS.keys()), index=0)
-    if st.button("↻ Refresh market data", use_container_width=True):
+with sel3:
+    st.markdown("<div style='height:28px'></div>", unsafe_allow_html=True)
+    if st.button("↻ Refresh", use_container_width=True):
         fetch_data.clear()
         st.rerun()
-    st.markdown("---")
-    st.caption("Data source: Yahoo Finance")
-    st.caption("No broker execution or live order connection.")
 
 symbol = ASSETS[asset_name]
 
@@ -379,6 +367,8 @@ else:
     side = "WAIT"
     entry = sl = tp1 = tp2 = tp3 = None
 
+st.markdown("---")
+
 # ------------------------- MARKET SNAPSHOT -------------------------
 
 m1, m2, m3 = st.columns(3)
@@ -409,10 +399,10 @@ if side != "WAIT":
     trade_cols = st.columns(5)
     trade_values = [
         ("DIRECTION", side, "#f0c75e"),
-        ("ENTRY PRICE", f"{entry:,.4f}", "#65c7f2"),
-        ("STOP LOSS", f"{sl:,.4f}", "#ff747c"),
-        ("TAKE PROFIT 1", f"{tp1:,.4f}", "#46d6a5"),
-        ("TAKE PROFIT 2", f"{tp2:,.4f}", "#46d6a5"),
+        ("ENTRY PRICE", fmt(entry), "#65c7f2"),
+        ("STOP LOSS", fmt(sl), "#ff747c"),
+        ("TAKE PROFIT 1", fmt(tp1), "#46d6a5"),
+        ("TAKE PROFIT 2", fmt(tp2), "#46d6a5"),
     ]
     for col, (label, value, color) in zip(trade_cols, trade_values):
         with col:
@@ -426,7 +416,7 @@ if side != "WAIT":
     st.markdown(
         f"<div class='trade-card' style='border-color:#315b50'>"
         f"<span class='trade-label'>TAKE PROFIT 3</span><br>"
-        f"<span style='color:#46d6a5;font-size:21px;font-weight:800'>{tp3:,.4f}</span>"
+        f"<span style='color:#46d6a5;font-size:21px;font-weight:800'>{fmt(tp3)}</span>"
         f"<span class='small-note'> &nbsp; · &nbsp; ATR stop distance: {stop_distance:.4f}</span>"
         f"</div>",
         unsafe_allow_html=True
@@ -448,16 +438,8 @@ tab_overview, tab_journal, tab_history = st.tabs([
 
 with tab_overview:
     st.subheader("Professional market chart")
-    vk = st.checkbox("Show Kijun Sen", True, key="vk")
-    render_chart(
-        data, vk,
-        entry=entry, sl=sl, tp1=tp1, tp2=tp2, tp3=tp3
-    )
+    render_chart(data, entry=entry, sl=sl, tp1=tp1, tp2=tp2, tp3=tp3)
 
-    st.markdown("#### Ichimoku reference")
-    st.metric("Kijun Sen", f"{last['Kijun']:.4f}")
-
-    # RSI and ATR intentionally placed BELOW the trade setup and chart.
     st.markdown("---")
     st.markdown("#### Oscillators & volatility")
     low1, low2, low3 = st.columns(3)
@@ -469,9 +451,7 @@ with tab_overview:
         text=f"RSI 14 · {rsi:.1f} · " +
              ("Overbought zone" if rsi >= 70 else "Oversold zone" if rsi <= 30 else "Neutral zone")
     )
-    st.caption(
-        "ATR-based levels are analytical estimates, not guaranteed execution prices."
-    )
+    st.caption("ATR-based levels are analytical estimates, not guaranteed execution prices.")
     st.caption(
         f"Last candle: {data.index[-1]} · "
         f"Updated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
@@ -482,7 +462,7 @@ with tab_journal:
     trades = get_trades()
 
     if trades.empty:
-        st.info("Your journal is empty. Save a setup from the Signal setup tab.")
+        st.info("Your journal is empty. Save a setup from the featured trade setup above.")
     else:
         open_trades = trades[trades["status"].isin(["Planned", "Open"])]
         st.markdown(f"**Active / planned setups: {len(open_trades)}**")
@@ -495,39 +475,43 @@ with tab_journal:
                 f"<div class='trade-label'>#{trade_id} · {trade['asset']} · {trade['timeframe']}</div>"
                 f"<div style='font-size:20px;font-weight:800;color:{side_color}'>"
                 f"{trade['side']} · {trade['status']}</div>"
-                f"<div class='small-note'>Entry: {trade['entry']:.4f} "
-                f" | SL: {trade['stop_loss']:.4f} "
-                f" | TP1: {trade['tp1']:.4f} "
-                f" | TP2: {trade['tp2']:.4f} "
-                f" | TP3: {trade['tp3']:.4f}</div>"
+                f"<div class='small-note'>Entry: {fmt(trade['entry'])} "
+                f" | SL: {fmt(trade['stop_loss'])} "
+                f" | TP1: {fmt(trade['tp1'])} "
+                f" | TP2: {fmt(trade['tp2'])} "
+                f" | TP3: {fmt(trade['tp3'])}</div>"
                 f"</div>",
                 unsafe_allow_html=True
             )
 
-        selected_id = st.selectbox(
-            "Select setup to update",
-            open_trades["id"].astype(int).tolist(),
-            format_func=lambda x: f"Trade #{x} · {open_trades.loc[open_trades['id']==x, 'asset'].iloc[0]}"
-        )
-        chosen = open_trades[open_trades["id"] == selected_id].iloc[0]
-        status_choice = st.selectbox(
-            "Update status",
-            ["Planned", "Open", "Closed", "Cancelled"],
-            index=["Planned", "Open", "Closed", "Cancelled"].index(chosen["status"])
-        )
-        exit_value = None
-        if status_choice == "Closed":
-            exit_value = st.number_input(
-                "Exit price",
-                value=float(chosen["entry"]),
-                format="%.5f"
+        if not open_trades.empty:
+            selected_id = st.selectbox(
+                "Select setup to update",
+                open_trades["id"].astype(int).tolist(),
+                format_func=lambda x: f"Trade #{x} · {open_trades.loc[open_trades['id']==x, 'asset'].iloc[0]}"
             )
-        note = st.text_input("Trade note (optional)", value=chosen["notes"] or "")
+            chosen = open_trades[open_trades["id"] == selected_id].iloc[0]
+            statuses = ["Planned", "Open", "Closed", "Cancelled"]
+            status_choice = st.selectbox(
+                "Update status", statuses,
+                index=statuses.index(chosen["status"])
+            )
+            exit_value = None
+            if status_choice == "Closed":
+                exit_value = st.number_input(
+                    "Exit price",
+                    value=float(chosen["entry"]),
+                    format="%.5f"
+                )
+            note = st.text_input(
+                "Trade note (optional)",
+                value=chosen["notes"] if pd.notna(chosen["notes"]) else ""
+            )
 
-        if st.button("Save journal update", type="primary"):
-            update_trade_status(selected_id, status_choice, exit_value, note)
-            st.success("Journal updated.")
-            st.rerun()
+            if st.button("Save journal update", type="primary"):
+                update_trade_status(selected_id, status_choice, exit_value, note)
+                st.success("Journal updated.")
+                st.rerun()
 
 with tab_history:
     st.subheader("Trade history & statistics")
@@ -542,17 +526,16 @@ with tab_history:
 
         wins = 0
         losses = 0
-        if not closed.empty:
-            for _, trd in closed.iterrows():
-                if pd.notna(trd["exit_price"]):
-                    if trd["side"] == "LONG":
-                        won = trd["exit_price"] > trd["entry"]
-                    else:
-                        won = trd["exit_price"] < trd["entry"]
-                    if won:
-                        wins += 1
-                    else:
-                        losses += 1
+        for _, trd in closed.iterrows():
+            if pd.notna(trd["exit_price"]):
+                if trd["side"] == "LONG":
+                    won = trd["exit_price"] > trd["entry"]
+                else:
+                    won = trd["exit_price"] < trd["entry"]
+                if won:
+                    wins += 1
+                else:
+                    losses += 1
 
         win_rate = (wins / (wins + losses) * 100) if (wins + losses) else 0
 
@@ -588,7 +571,7 @@ st.markdown("---")
 st.markdown(
     "<div style='text-align:center;color:#8294a8;font-size:12px'>"
     "OUTEMGOUNT MA NEXUS · PROFESSIONAL EDITION<br>"
-    "Technical analysis only · Not a broker · No trade execution"
+    "Data source: Yahoo Finance · Technical analysis only · Not a broker · No trade execution"
     "</div>",
     unsafe_allow_html=True
 )
