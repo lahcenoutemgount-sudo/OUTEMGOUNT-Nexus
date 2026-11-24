@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 
 import numpy as np
 import pandas as pd
+import requests
 import streamlit as st
 import streamlit.components.v1 as components
 import yfinance as yf
@@ -143,13 +144,18 @@ init_db()
 
 # ------------------------- DATA -------------------------
 
+# name -> (Yahoo symbol, OANDA instrument or None)
 ASSETS = {
-    "XAUUSD · Gold Spot": "XAUUSD=X",
-    "Gold Futures · GC=F": "GC=F",
-    "EURUSD": "EURUSD=X",
-    "BTCUSD": "BTC-USD",
-    "Crude Oil": "CL=F",
-    "NASDAQ 100": "^NDX",
+    "XAUUSD · Gold Spot": ("XAUUSD=X", "XAU_USD"),
+    "Gold Futures · GC=F": ("GC=F", None),
+    "EURUSD": ("EURUSD=X", "EUR_USD"),
+    "BTCUSD": ("BTC-USD", None),
+    "Crude Oil": ("CL=F", "WTICO_USD"),
+    "NASDAQ 100": ("^NDX", "NAS100_USD"),
+}
+OANDA_GRAN = {
+    "1m": "M1", "5m": "M5", "15m": "M15", "30m": "M30",
+    "1h": "H1", "4h": "H4", "1d": "D", "1w": "W",
 }
 TF_SETTINGS = {
     "1m": ("1m", "5d"),
@@ -162,8 +168,43 @@ TF_SETTINGS = {
     "1w": ("1wk", "5y"),
 }
 
-@st.cache_data(ttl=15)
-def fetch_data(symbol, timeframe):
+
+def get_oanda_creds():
+    """Read optional OANDA settings from Streamlit Secrets."""
+    try:
+        token = st.secrets.get("OANDA_TOKEN")
+        env = str(st.secrets.get("OANDA_ENV", "practice")).lower()
+    except Exception:
+        return None, "practice"
+    return (token or None), env
+
+
+def fetch_oanda(instrument, timeframe, token, env):
+    base = "https://api-fxtrade.oanda.com" if env == "live" else "https://api-fxpractice.oanda.com"
+    resp = requests.get(
+        f"{base}/v3/instruments/{instrument}/candles",
+        headers={"Authorization": f"Bearer {token}"},
+        params={"granularity": OANDA_GRAN[timeframe], "count": 500, "price": "M"},
+        timeout=10,
+    )
+    resp.raise_for_status()
+    rows = []
+    for c in resp.json().get("candles", []):
+        m = c.get("mid")
+        if not m:
+            continue
+        rows.append({
+            "time": pd.to_datetime(c["time"], utc=True),
+            "Open": float(m["o"]), "High": float(m["h"]),
+            "Low": float(m["l"]), "Close": float(m["c"]),
+            "Volume": float(c.get("volume", 0)),
+        })
+    if not rows:
+        return pd.DataFrame()
+    return pd.DataFrame(rows).set_index("time")
+
+
+def fetch_yahoo(symbol, timeframe):
     interval, period = TF_SETTINGS[timeframe]
     df = yf.download(
         symbol, period=period, interval=interval,
@@ -195,6 +236,22 @@ def fetch_data(symbol, timeframe):
         }).dropna(subset=required)
 
     return df
+
+
+@st.cache_data(ttl=10)
+def fetch_data(yahoo_symbol, oanda_instrument, timeframe):
+    """Returns (dataframe, source_label, error_text). OANDA first, Yahoo as fallback."""
+    token, env = get_oanda_creds()
+    err = ""
+    if oanda_instrument and token:
+        try:
+            df = fetch_oanda(oanda_instrument, timeframe, token, env)
+            if len(df) >= 60:
+                return df, f"OANDA {env}", ""
+            err = "not enough candles"
+        except Exception as e:
+            err = str(e)[:90]
+    return fetch_yahoo(yahoo_symbol, timeframe), "Yahoo Finance", err
 
 def add_indicators(df):
     d = df.copy()
@@ -380,18 +437,24 @@ with sel3:
         fetch_data.clear()
         st.rerun()
 
-auto_on = st.toggle("Auto refresh (30s)", value=True)
+auto_on = st.toggle("Auto refresh (15s)", value=True)
 if auto_on:
     try:
         from streamlit_autorefresh import st_autorefresh
-        st_autorefresh(interval=30_000, key="nexus_auto")
+        st_autorefresh(interval=15_000, key="nexus_auto")
     except ImportError:
         st.caption("Auto refresh needs the package: add `streamlit-autorefresh` to requirements.txt")
 
-symbol = ASSETS[asset_name]
+yahoo_symbol, oanda_instrument = ASSETS[asset_name]
+
+FALLBACKS = {"XAUUSD=X": "GC=F"}  # if the spot feed is empty, use futures
 
 with st.spinner("Loading market data..."):
-    raw = fetch_data(symbol, timeframe)
+    raw, source, feed_err = fetch_data(yahoo_symbol, oanda_instrument, timeframe)
+    if (raw.empty or len(raw) < 60) and yahoo_symbol in FALLBACKS:
+        raw, source, feed_err = fetch_data(FALLBACKS[yahoo_symbol], None, timeframe)
+        if not raw.empty:
+            st.info("Spot feed unavailable right now, showing Gold Futures (GC=F) instead.")
 
 if raw.empty or len(raw) < 60:
     st.error("Market data is unavailable or insufficient for this selection. Try another timeframe.")
@@ -475,6 +538,15 @@ st.markdown("---")
 
 # ------------------------- MARKET SNAPSHOT -------------------------
 
+feed_color = "#35c69a" if source.startswith("OANDA") else "#f0c75e"
+st.markdown(
+    f"<div class='small-note' style='text-align:center;margin-bottom:8px'>"
+    f"<span style='color:{feed_color}'>●</span> Feed: {source}</div>",
+    unsafe_allow_html=True
+)
+if feed_err:
+    st.caption(f"OANDA unavailable ({feed_err}) — using Yahoo Finance instead.")
+
 m1, m2, m3 = st.columns(3)
 m1.metric("LAST PRICE", f"{price:,.4f}", delta=f"{chg_pct:+.2f}% last candle")
 m2.metric("MARKET TREND", trend)
@@ -487,7 +559,7 @@ if last_ts.tzinfo is None:
 age_min = (pd.Timestamp.now(tz="UTC") - last_ts).total_seconds() / 60
 if age_min > BAR_MIN[timeframe] * 2 + 15:
     st.warning(
-        f"Last data point is {age_min:.0f} min old. Yahoo data can be delayed "
+        f"Last data point is {age_min:.0f} min old. The feed may be delayed "
         f"(or the market is closed), so it may differ from your broker/MT5 price."
     )
 
@@ -720,7 +792,7 @@ st.markdown("---")
 st.markdown(
     "<div style='text-align:center;color:#8294a8;font-size:12px'>"
     "OUTEMGOUNT MA NEXUS · PROFESSIONAL EDITION<br>"
-    "Data source: Yahoo Finance · Technical analysis only · Not a broker · No trade execution"
+    "Data: OANDA / Yahoo Finance · Technical analysis only · Not a broker · No trade execution"
     "</div>",
     unsafe_allow_html=True
 )
