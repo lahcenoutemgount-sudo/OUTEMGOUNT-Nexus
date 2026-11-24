@@ -5,127 +5,606 @@ import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
 from datetime import datetime
-import pytz
 
-st.set_page_config(page_title="OUTEMGOUNT MA Nexus", layout="wide", initial_sidebar_state="collapsed")
+# ==========================================
+# 1. PAGE CONFIGURATION
+# ==========================================
+st.set_page_config(
+    page_title="OUTEMGOUNT MA Nexus",
+    page_icon="📊",
+    layout="wide",
+    initial_sidebar_state="collapsed"
+)
 
+# ==========================================
+# 2. PROFESSIONAL DESIGN
+# ==========================================
 st.markdown("""
-    <style>
-    .stApp { background-color: #0E1117; }
-    h1, h2, h3 { color: #FFD700 !important; }
-    div[data-testid="stMetricValue"] { color: #FFD700 !important; font-size: 24px; font-weight: bold; }
-    div[data-testid="stMetricLabel"] { color: #A0AEC0 !important; font-size: 14px; }
-    #MainMenu {visibility: hidden;}
-    header {visibility: hidden;}
-    footer {visibility: hidden;}
-    .stDataFrame { border: 1px solid #2D3748; border-radius: 10px; }
-    </style>
-    """, unsafe_allow_html=True)
+<style>
+.stApp {
+    background-color: #0E1117;
+}
+h1, h2, h3 {
+    color: #FFD700 !important;
+}
+div[data-testid="stMetricValue"] {
+    color: #FFD700;
+    font-size: 24px;
+    font-weight: bold;
+}
+div[data-testid="stMetricLabel"] {
+    color: #A0AEC0;
+}
+.stDataFrame {
+    border: 1px solid #2D3748;
+    border-radius: 10px;
+}
+div.stButton > button {
+    background: linear-gradient(90deg,#B8860B,#FFD700);
+    color: black;
+    font-weight: bold;
+    border-radius: 8px;
+    border: none;
+}
+hr {
+    border-color: #2D3748;
+}
+</style>
+""", unsafe_allow_html=True)
 
+# ==========================================
+# 3. HEADER
+# ==========================================
 st.title("📊 OUTEMGOUNT MA Nexus")
-st.caption("Professional Trading Signals & Analysis")
+st.caption("PROFESSIONAL TRADING ANALYSIS | PHOENIX EDITION")
 
-col_sym, col_tf = st.columns(2)
+col1, col2, col3 = st.columns([2, 2, 1])
 
-with col_sym:
-    symbol = st.selectbox("Select Asset", ["XAUUSD (Gold)", "EURUSD", "BTCUSD (Bitcoin)", "Oil (WTI)", "Nasdaq 100"], index=0)
-with col_tf:
-    timeframe = st.selectbox("Select Timeframe", ["15m", "1h", "4h", "1d"], index=1)
+symbol_map = {
+    "XAUUSD (Gold)": "GC=F",
+    "EURUSD": "EURUSD=X",
+    "BTCUSD (Bitcoin)": "BTC-USD",
+    "Oil (WTI)": "CL=F",
+    "Nasdaq 100": "^IXIC"
+}
 
-symbol_map = {"XAUUSD (Gold)": "GC=F", "EURUSD": "EURUSD=X", "BTCUSD (Bitcoin)": "BTC-USD", "Oil (WTI)": "CL=F", "Nasdaq 100": "^IXIC"}
-actual_symbol = symbol_map[symbol]
+with col1:
+    symbol = st.selectbox(
+        "Select Asset",
+        list(symbol_map.keys())
+    )
 
-@st.cache_data(ttl=60) 
+with col2:
+    timeframe = st.selectbox(
+        "Select Timeframe",
+        ["15m", "1h", "4h", "1d"],
+        index=1
+    )
+
+with col3:
+    st.write("")
+    st.write("")
+    if st.button("🔄 Refresh Data", use_container_width=True):
+        st.cache_data.clear()
+        st.rerun()
+
+# ==========================================
+# 4. INDICATOR SETTINGS
+# ==========================================
+with st.expander("⚙️ Chart Settings", expanded=False):
+    c1, c2, c3, c4 = st.columns(4)
+
+    with c1:
+        show_ma5 = st.checkbox("MA 5", True)
+        show_ma13 = st.checkbox("MA 13", True)
+
+    with c2:
+        show_ma20 = st.checkbox("MA 20", True)
+        show_ma50 = st.checkbox("MA 50", True)
+
+    with c3:
+        show_kijun = st.checkbox("Kijun", True)
+        show_signals = st.checkbox("BUY / SELL Signals", True)
+
+    with c4:
+        show_rsi = st.checkbox("RSI Panel", True)
+        show_atr = st.checkbox("ATR Information", True)
+
+# ==========================================
+# 5. DATA DOWNLOAD
+# ==========================================
+@st.cache_data(ttl=60)
 def get_data(sym, tf):
-    if tf in ["15m", "30m"]: period = "5d" 
-    elif tf == "1h": period = "1mo"
-    else: period = "3mo"
-    return yf.download(sym, period=period, interval=tf, ignore_tz=True, auto_adjust=False, progress=False)
 
-data = get_data(actual_symbol, timeframe)
+    if tf == "15m":
+        period = "5d"
+        interval = "15m"
 
-if not data.empty:
-    data = data.dropna()
-    if isinstance(data.columns, pd.MultiIndex): data.columns = data.columns.get_level_values(0)
-    
-    data['Close'] = pd.to_numeric(data['Close'], errors='coerce')
-    data['High'] = pd.to_numeric(data['High'], errors='coerce')
-    data['Low'] = pd.to_numeric(data['Low'], errors='coerce')
-    data['Open'] = pd.to_numeric(data['Open'], errors='coerce')
+    elif tf == "1h":
+        period = "3mo"
+        interval = "1h"
 
-    data['MA5'] = data['Close'].rolling(window=5).mean()
-    data['MA13'] = data['Close'].rolling(window=13).mean()
-    data['MA20'] = data['Close'].rolling(window=20).mean()
-    data['MA50'] = data['Close'].rolling(window=50).mean()
+    elif tf == "4h":
+        period = "6mo"
+        interval = "1h"
 
-    delta = data['Close'].diff()
-    gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
-    loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
-    rs = gain / loss
-    data['RSI'] = 100 - (100 / (1 + rs))
-
-    data['High-Low'] = data['High'] - data['Low']
-    data['High-PrevClose'] = np.abs(data['High'] - data['Close'].shift(1))
-    data['Low-PrevClose'] = np.abs(data['Low'] - data['Close'].shift(1))
-    data['TR'] = data[['High-Low', 'High-PrevClose', 'Low-PrevClose']].max(axis=1)
-    data['ATR'] = data['TR'].rolling(window=14).mean()
-
-    data['Kijun_High'] = data['High'].rolling(window=26).max()
-    data['Kijun_Low'] = data['Low'].rolling(window=26).min()
-    data['Kijun'] = (data['Kijun_High'] + data['Kijun_Low']) / 2
-
-    data['Crossover'] = np.where(data['MA5'] > data['MA13'], 1, -1)
-    data['Signal'] = data['Crossover'].diff()
-
-    last_closed = -2 
-    current_price = float(data['Close'].iloc[last_closed])
-    current_atr = float(data['ATR'].iloc[last_closed])
-    current_kijun = float(data['Kijun'].iloc[last_closed])
-    current_ma20 = float(data['MA20'].iloc[last_closed])
-    
-    risk = current_atr * 1.5
-    entry_price = current_price
-    sl_long = entry_price - risk
-    sl_short = entry_price + risk
-    tp1_long = entry_price + (risk * 1.5)
-    tp2_long = entry_price + (risk * 3.0)
-    tp1_short = entry_price - (risk * 1.5)
-    tp2_short = entry_price - (risk * 3.0)
-
-    latest_signal = data['Signal'].iloc[last_closed]
-
-    if latest_signal == 2: st.success(f"🟢 BUY Signal | إشارة شراء - {timeframe}")
-    elif latest_signal == -2: st.error(f"🔴 SELL Signal | إشارة بيع - {timeframe}")
-    else: st.info(f"⏳ No Signal | لا توجد إشارة - {timeframe}")
-
-    st.subheader("Market Trend | اتجاه السوق")
-    if current_price > current_kijun and current_price > current_ma20: st.success("🚀 UPTREND | اتجاه صاعد")
-    elif current_price < current_kijun and current_price < current_ma20: st.error("📉 DOWNTREND | اتجاه هابط")
-    else: st.warning("↔️ RANGE | اتجاه عرضي")
-
-    st.subheader("Trade Levels | مستويات الصفقة")
-    col_e, col_sl, col_tp1, col_tp2 = st.columns(4)
-    
-    if latest_signal == 2 or latest_signal == -2:
-        with col_e: st.metric(label="Entry | الدخول", value=f"{entry_price:.2f}")
-        if latest_signal == 2:
-            with col_sl: st.metric(label="Stop Loss", value=f"{sl_long:.2f}")
-            with col_tp1: st.metric(label="Target 1", value=f"{tp1_long:.2f}")
-            with col_tp2: st.metric(label="Target 2", value=f"{tp2_long:.2f}")
-        else:
-            with col_sl: st.metric(label="Stop Loss", value=f"{sl_short:.2f}")
-            with col_tp1: st.metric(label="Target 1", value=f"{tp1_short:.2f}")
-            with col_tp2: st.metric(label="Target 2", value=f"{tp2_short:.2f}")
     else:
-        st.info("No active trade levels | لا توجد مستويات صفقة حالياً")
+        period = "2y"
+        interval = "1d"
 
-    col1, col2, col3 = st.columns(3)
-    with col1: st.metric(label="Current Price", value=f"{current_price:.2f}")
-    with col2: st.metric(label="RSI (14)", value=f"{float(data['RSI'].iloc[last_closed]):.1f}")
-    with col3: st.metric(label="ATR (14)", value=f"{current_atr:.4f}")
+    df = yf.download(
+        sym,
+        period=period,
+        interval=interval,
+        auto_adjust=False,
+        progress=False
+    )
 
-    fig = go.Figure(data=[go.Candlestick(x=data.index.tail(50), open=data['Open'].tail(50), high=data['High'].tail(50), low=data['Low'].tail(50), close=data['Close'].tail(50), increasing_line_color='#00FF00', decreasing_line_color='#FF0000')])
-    fig.update_layout(template='plotly_dark', xaxis_rangeslider_visible=False, height=400, margin=dict(l=10, r=10, t=10, b=10), paper_bgcolor='#0E1117', plot_bgcolor='#0E1117')
-    st.plotly_chart(fig, use_container_width=True)
-else:
-    st.error("Could not fetch data")
+    if df.empty:
+        return pd.DataFrame()
+
+    if isinstance(df.columns, pd.MultiIndex):
+        for level in range(df.columns.nlevels):
+            values = df.columns.get_level_values(level)
+            if "Open" in values and "Close" in values:
+                df.columns = values
+                break
+
+    required = ["Open", "High", "Low", "Close"]
+
+    if not all(col in df.columns for col in required):
+        return pd.DataFrame()
+
+    if tf == "4h":
+        df = df.resample("4h").agg({
+            "Open": "first",
+            "High": "max",
+            "Low": "min",
+            "Close": "last",
+            "Volume": "sum"
+        } if "Volume" in df.columns else {
+            "Open": "first",
+            "High": "max",
+            "Low": "min",
+            "Close": "last"
+        })
+
+    for col in required:
+        df[col] = pd.to_numeric(df[col], errors="coerce")
+
+    return df.dropna(subset=required)
+
+
+# ==========================================
+# 6. CALCULATE INDICATORS
+# ==========================================
+def calculate_indicators(df):
+
+    df = df.copy()
+
+    df["MA5"] = df["Close"].rolling(5).mean()
+    df["MA13"] = df["Close"].rolling(13).mean()
+    df["MA20"] = df["Close"].rolling(20).mean()
+    df["MA50"] = df["Close"].rolling(50).mean()
+
+    # RSI 14
+    delta = df["Close"].diff()
+
+    gain = delta.clip(lower=0).rolling(14).mean()
+    loss = (-delta.clip(upper=0)).rolling(14).mean()
+
+    rs = gain / loss.replace(0, np.nan)
+
+    df["RSI"] = 100 - (100 / (1 + rs))
+
+    df.loc[(loss == 0) & (gain > 0), "RSI"] = 100
+    df.loc[(loss == 0) & (gain == 0), "RSI"] = 50
+
+    # ATR 14
+    high_low = df["High"] - df["Low"]
+
+    high_close = abs(
+        df["High"] - df["Close"].shift(1)
+    )
+
+    low_close = abs(
+        df["Low"] - df["Close"].shift(1)
+    )
+
+    df["TR"] = pd.concat(
+        [high_low, high_close, low_close],
+        axis=1
+    ).max(axis=1)
+
+    df["ATR"] = df["TR"].rolling(14).mean()
+
+    # KIJUN
+    df["Kijun_High"] = df["High"].rolling(26).max()
+    df["Kijun_Low"] = df["Low"].rolling(26).min()
+
+    df["Kijun"] = (
+        df["Kijun_High"] + df["Kijun_Low"]
+    ) / 2
+
+    # MA CROSSOVER
+    df["Crossover"] = np.where(
+        df["MA5"] > df["MA13"], 1, -1
+    )
+
+    df["Signal"] = df["Crossover"].diff()
+
+    return df
+
+
+# ==========================================
+# 7. MAIN ANALYSIS
+# ==========================================
+try:
+    actual_symbol = symbol_map[symbol]
+    data = get_data(actual_symbol, timeframe)
+
+    if data.empty or len(data) < 55:
+        st.error(
+            "Not enough market data. Please try another timeframe."
+        )
+        st.stop()
+
+    data = calculate_indicators(data)
+
+    # Last CLOSED candle
+    last_closed = -2
+
+    current_price = float(
+        data["Close"].iloc[last_closed]
+    )
+
+    current_atr = float(
+        data["ATR"].iloc[last_closed]
+    )
+
+    current_kijun = float(
+        data["Kijun"].iloc[last_closed]
+    )
+
+    current_ma20 = float(
+        data["MA20"].iloc[last_closed]
+    )
+
+    current_rsi = float(
+        data["RSI"].iloc[last_closed]
+    )
+
+    if not np.isfinite(current_atr) or current_atr <= 0:
+        st.error("ATR data is not available.")
+        st.stop()
+
+    latest_signal = data["Signal"].iloc[last_closed]
+
+    # ======================================
+    # 8. MARKET TREND
+    # ======================================
+    st.subheader("🌍 Market Trend | اتجاه السوق")
+
+    if current_price > current_kijun and current_price > current_ma20:
+        trend = "UPTREND 🚀"
+        st.success("UPTREND | اتجاه صاعد")
+
+    elif current_price < current_kijun and current_price < current_ma20:
+        trend = "DOWNTREND 📉"
+        st.error("DOWNTREND | اتجاه هابط")
+
+    else:
+        trend = "RANGE ↔️"
+        st.warning("RANGE | اتجاه عرضي")
+
+    # ======================================
+    # 9. TRADING SIGNALS
+    # ======================================
+    st.subheader("🎯 Trading Signals")
+
+    if latest_signal == 2:
+        signal_name = "BUY"
+        st.success(f"🟢 BUY SIGNAL | إشارة شراء - {timeframe}")
+
+    elif latest_signal == -2:
+        signal_name = "SELL"
+        st.error(f"🔴 SELL SIGNAL | إشارة بيع - {timeframe}")
+
+    else:
+        signal_name = "WAIT"
+        st.info("⏳ WAIT | لا توجد إشارة جديدة")
+
+    # ======================================
+    # 10. ENTRY / SL / TP
+    # ======================================
+    st.subheader("💰 Trade Management")
+
+    risk = current_atr * 1.5
+    entry = current_price
+
+    if signal_name == "BUY":
+
+        sl = entry - risk
+        tp1 = entry + risk * 1.5
+        tp2 = entry + risk * 3
+
+    elif signal_name == "SELL":
+
+        sl = entry + risk
+        tp1 = entry - risk * 1.5
+        tp2 = entry - risk * 3
+
+    else:
+        sl = np.nan
+        tp1 = np.nan
+        tp2 = np.nan
+
+    if signal_name in ["BUY", "SELL"]:
+
+        a, b, c, d = st.columns(4)
+
+        a.metric("ENTRY", f"{entry:.2f}")
+        b.metric("STOP LOSS", f"{sl:.2f}")
+        c.metric("TARGET 1", f"{tp1:.2f}")
+        d.metric("TARGET 2", f"{tp2:.2f}")
+
+    else:
+        st.info("No active trade levels.")
+
+    # ======================================
+    # 11. MARKET METRICS
+    # ======================================
+    st.subheader("📈 Market Dashboard")
+
+    a, b, c, d = st.columns(4)
+
+    a.metric(
+        "Market Price",
+        f"{current_price:.2f}"
+    )
+
+    b.metric(
+        "RSI 14",
+        f"{current_rsi:.1f}"
+    )
+
+    c.metric(
+        "ATR 14",
+        f"{current_atr:.4f}"
+    )
+
+    d.metric(
+        "Trend",
+        trend
+    )
+
+    # RSI STATUS
+    if current_rsi >= 70:
+        st.warning("RSI: Overbought | تشبع شرائي")
+
+    elif current_rsi <= 30:
+        st.warning("RSI: Oversold | تشبع بيعي")
+
+    else:
+        st.info("RSI: Neutral Zone | منطقة محايدة")
+
+    # ======================================
+    # 12. PROFESSIONAL CANDLESTICK CHART
+    # ======================================
+    st.subheader("🕯️ Professional Price Chart")
+
+    chart_data = data.tail(100)
+
+    fig = go.Figure()
+
+    fig.add_trace(go.Candlestick(
+        x=chart_data.index,
+        open=chart_data["Open"],
+        high=chart_data["High"],
+        low=chart_data["Low"],
+        close=chart_data["Close"],
+        name="Price",
+        increasing_line_color="#00FF00",
+        decreasing_line_color="#FF0000"
+    ))
+
+    # MOVING AVERAGES
+    ma_settings = [
+        ("MA5", show_ma5, "#FFD700"),
+        ("MA13", show_ma13, "#00FFFF"),
+        ("MA20", show_ma20, "#FF8C00"),
+        ("MA50", show_ma50, "#FF00FF"),
+        ("Kijun", show_kijun, "#FFFFFF")
+    ]
+
+    for name, visible, color in ma_settings:
+
+        if visible:
+            fig.add_trace(go.Scatter(
+                x=chart_data.index,
+                y=chart_data[name],
+                name=name,
+                mode="lines",
+                line=dict(
+                    color=color,
+                    width=1.5
+                )
+            ))
+
+    # BUY / SELL MARKERS
+    if show_signals:
+
+        buy_points = chart_data[
+            chart_data["Signal"] == 2
+        ]
+
+        sell_points = chart_data[
+            chart_data["Signal"] == -2
+        ]
+
+        fig.add_trace(go.Scatter(
+            x=buy_points.index,
+            y=buy_points["Low"],
+            mode="markers+text",
+            name="BUY",
+            text=["BUY"] * len(buy_points),
+            textposition="bottom center",
+            marker=dict(
+                symbol="triangle-up",
+                size=12,
+                color="#00FF00"
+            )
+        ))
+
+        fig.add_trace(go.Scatter(
+            x=sell_points.index,
+            y=sell_points["High"],
+            mode="markers+text",
+            name="SELL",
+            text=["SELL"] * len(sell_points),
+            textposition="top center",
+            marker=dict(
+                symbol="triangle-down",
+                size=12,
+                color="#FF0000"
+            )
+        ))
+
+    # ENTRY / SL / TP LINES
+    if signal_name in ["BUY", "SELL"]:
+
+        for value, label, color in [
+            (entry, "ENTRY", "#FFD700"),
+            (sl, "STOP LOSS", "#FF0000"),
+            (tp1, "TP1", "#00FF00"),
+            (tp2, "TP2", "#00FFFF")
+        ]:
+
+            fig.add_hline(
+                y=value,
+                line_dash="dash",
+                line_color=color,
+                annotation_text=label,
+                annotation_position="top right"
+            )
+
+    fig.update_layout(
+        template="plotly_dark",
+        xaxis_rangeslider_visible=False,
+        height=550,
+        paper_bgcolor="#0E1117",
+        plot_bgcolor="#0E1117",
+        margin=dict(l=10, r=10, t=30, b=10),
+        legend=dict(
+            orientation="h",
+            yanchor="bottom",
+            y=1.02,
+            xanchor="left",
+            x=0
+        )
+    )
+
+    st.plotly_chart(
+        fig,
+        use_container_width=True
+    )
+
+    # ======================================
+    # 13. RSI CHART
+    # ======================================
+    if show_rsi:
+
+        st.subheader("📊 RSI Analysis")
+
+        rsi_fig = go.Figure()
+
+        rsi_fig.add_trace(go.Scatter(
+            x=chart_data.index,
+            y=chart_data["RSI"],
+            name="RSI 14",
+            line=dict(
+                color="#FFD700",
+                width=2
+            )
+        ))
+
+        rsi_fig.add_hline(
+            y=70,
+            line_dash="dash",
+            line_color="red"
+        )
+
+        rsi_fig.add_hline(
+            y=30,
+            line_dash="dash",
+            line_color="green"
+        )
+
+        rsi_fig.add_hline(
+            y=50,
+            line_dash="dot",
+            line_color="gray"
+        )
+
+        rsi_fig.update_layout(
+            template="plotly_dark",
+            height=220,
+            yaxis=dict(
+                range=[0, 100]
+            ),
+            paper_bgcolor="#0E1117",
+            plot_bgcolor="#0E1117"
+        )
+
+        st.plotly_chart(
+            rsi_fig,
+            use_container_width=True
+        )
+
+    # ======================================
+    # 14. ATR INFORMATION
+    # ======================================
+    if show_atr:
+
+        st.subheader("🛡️ Risk Management")
+
+        st.write(
+            f"ATR 14: {current_atr:.4f}"
+        )
+
+        st.write(
+            f"Suggested ATR Stop Distance: {risk:.4f}"
+        )
+
+        st.caption(
+            "ATR-based levels are analytical estimates, "
+            "not guaranteed execution prices."
+        )
+
+    # ======================================
+    # 15. DATA INFORMATION
+    # ======================================
+    st.divider()
+
+    st.caption(
+        f"Asset: {symbol} | "
+        f"Timeframe: {timeframe} | "
+        f"Last candle: {data.index[last_closed]} | "
+        f"Updated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+    )
+
+    st.caption(
+        "OUTEMGOUNT MA Nexus | Professional Trading Dashboard"
+    )
+
+except Exception as e:
+
+    st.error(
+        "An unexpected error occurred while loading market data."
+    )
+
+    st.exception(e)
+
+    st.info(
+        "Please refresh the application or try another asset."
+    )
