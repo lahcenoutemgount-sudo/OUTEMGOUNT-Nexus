@@ -27,51 +27,62 @@ DB_PATH = "nexus_trades.db"
 st.markdown("""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
-html, body, [class*="css"] { font-family: Inter, sans-serif; }
-.stApp { background: #080e16; color: #e7edf5; }
-.block-container { padding-top: 4.2rem; padding-bottom: 2rem; max-width: 1600px; }
-[data-testid="stSidebar"], [data-testid="collapsedControl"] { display: none; }
-h1,h2,h3 { color: #f0c75e !important; letter-spacing: .2px; }
-[data-testid="stMetric"] {
-    background: linear-gradient(145deg,#121e2b,#0e1722);
-    border: 1px solid #25364a; border-radius: 13px; padding: 13px 15px;
-}
-[data-testid="stMetricLabel"] { color: #9aadc1 !important; }
-[data-testid="stMetricValue"] { color: #f4f6fa !important; }
+html, body, [class*="css"] { font-family: Inter, sans-serif; font-variant-numeric: tabular-nums; }
+.stApp { background:#0b111a; color:#dfe7f1; }
+.block-container { padding-top:4.2rem; padding-bottom:2rem; max-width:1500px; }
+[data-testid="stSidebar"], [data-testid="collapsedControl"] { display:none; }
+footer { visibility:hidden; }
+h1,h2,h3 { color:#e9eef5 !important; font-weight:700; letter-spacing:.2px; }
+hr { border-color:#1b2736 !important; }
+
 .nexus-header {
-    background: linear-gradient(110deg,#111d2b,#182638 60%,#111923);
-    border: 1px solid #34465a; border-radius: 18px;
-    padding: 22px 24px; margin-bottom: 12px;
+    background:#0f1622; border:1px solid #1e2b3c; border-top:2px solid #c9a54b;
+    border-radius:10px; padding:20px 24px; margin-bottom:14px; text-align:center;
 }
-.nexus-kicker { color:#9bacc0; font-size:12px; letter-spacing:2px; font-weight:700; }
-.nexus-title { color:#f0c75e; font-size:30px; font-weight:800; margin:3px 0; }
-.nexus-sub { color:#aebdce; font-size:13px; }
-.trade-card {
-    background: linear-gradient(145deg,#142131,#101923);
-    border:1px solid #2a3d52; border-radius:15px; padding:16px;
-    margin: 5px 0 12px 0; box-shadow: 0 8px 24px rgba(0,0,0,.18);
-}
-.trade-label { color:#a9bfd3; font-size:11px; letter-spacing:1.2px; font-weight:700; }
-.trade-number { color:#65c7f2; font-size:21px; font-weight:800; margin-top:3px; }
-.buy { color:#35c69a !important; font-weight:800; }
-.sell { color:#ff6b72 !important; font-weight:800; }
-.wait { color:#f0c75e !important; font-weight:800; }
-.small-note { color:#91a2b5; font-size:12px; }
-hr { border-color:#26384b !important; }
-.stButton>button { border-radius:10px; font-weight:700; }
-footer { visibility: hidden; }
-.nexus-header { text-align: center; }
-.nexus-title { font-size: clamp(20px, 5.4vw, 32px) !important; white-space: nowrap; }
-.live-dot { display:inline-block; width:8px; height:8px; border-radius:50%;
-    background:#35c69a; box-shadow:0 0 8px #35c69a; margin-right:7px; }
-.stTabs [data-baseweb="tab-list"] { gap: 6px; }
-.stTabs [data-baseweb="tab"] { background:#0f1a26; border-radius:10px 10px 0 0; padding:8px 14px; }
-.stTabs [aria-selected="true"] { background:#182638; color:#f0c75e; }
-div[data-baseweb="select"] > div { background:#0f1a26; border-color:#2a3d52; border-radius:10px; }
+.nexus-kicker { color:#7f8fa3; font-size:11px; letter-spacing:2.4px; font-weight:600; }
+.nexus-title { color:#e8c76a; font-size:clamp(20px,5.4vw,30px); font-weight:800;
+    letter-spacing:1.5px; margin:6px 0 4px; white-space:nowrap; }
+.nexus-sub { color:#8b9bae; font-size:12.5px; }
+.live-dot { display:inline-block; width:7px; height:7px; border-radius:50%;
+    background:#2fbf8f; margin-right:7px; }
+
+.section-title { color:#c9a54b; font-size:12px; font-weight:700; letter-spacing:2px;
+    text-transform:uppercase; border-bottom:1px solid #1b2736;
+    padding-bottom:6px; margin:6px 0 12px; }
+.trade-card { background:#101826; border:1px solid #1e2b3c; border-radius:10px;
+    padding:16px; margin:5px 0 12px 0; }
+.trade-label { color:#8ea0b5; font-size:10.5px; letter-spacing:1.4px; font-weight:700;
+    text-transform:uppercase; }
+.trade-number { color:#cfe3f5; font-size:21px; font-weight:700; margin-top:4px; }
+.buy { color:#2fbf8f !important; font-weight:800; }
+.sell { color:#e5646c !important; font-weight:800; }
+.wait { color:#e8c76a !important; font-weight:800; }
+.small-note { color:#8b9bae; font-size:12px; }
+
+[data-testid="stMetric"] { background:#101826; border:1px solid #1e2b3c;
+    border-left:3px solid #c9a54b; border-radius:10px; padding:12px 14px; }
+[data-testid="stMetricLabel"] { color:#8ea0b5 !important; text-transform:uppercase;
+    letter-spacing:1px; font-size:11px; }
+[data-testid="stMetricValue"] { color:#eef3f9 !important; }
+
+.tf-row { display:flex; gap:8px; margin:6px 0 8px; }
+.tf-chip { flex:1; background:#101826; border:1px solid #1e2b3c; border-radius:8px;
+    padding:9px 6px; text-align:center; }
+.tf-chip.active { border-color:#c9a54b; }
+.tf-name { color:#8ea0b5; font-size:11px; font-weight:700; letter-spacing:1px; }
+.tf-sig { font-size:12px; font-weight:800; margin-top:3px; }
+
+.stButton>button { border-radius:8px; font-weight:700; border:1px solid #2a3a4f; }
+.stButton>button[kind="primary"] { background:#c9a54b; color:#0b111a; border:0; }
+.stTabs [data-baseweb="tab-list"] { gap:4px; border-bottom:1px solid #1b2736; }
+.stTabs [data-baseweb="tab"] { background:transparent; padding:8px 14px; color:#8ea0b5; }
+.stTabs [aria-selected="true"] { color:#e8c76a; }
+div[data-baseweb="select"] > div { background:#101826; border-color:#1e2b3c; border-radius:8px; }
+
 @media (max-width: 640px) {
     .block-container { padding-left:.8rem; padding-right:.8rem; padding-top:4.6rem; }
-    .nexus-header { padding:16px 16px; border-radius:16px; }
-    .nexus-kicker { font-size:10px; letter-spacing:1.4px; }
+    .nexus-header { padding:16px 14px; }
+    .nexus-kicker { font-size:10px; letter-spacing:1.6px; }
     [data-testid="stMetricValue"] { font-size:1.5rem !important; }
     .trade-number { font-size:18px !important; }
 }
@@ -153,19 +164,12 @@ ASSETS = {
     "Crude Oil": ("CL=F", "WTICO_USD"),
     "NASDAQ 100": ("^NDX", "NAS100_USD"),
 }
-OANDA_GRAN = {
-    "1m": "M1", "5m": "M5", "15m": "M15", "30m": "M30",
-    "1h": "H1", "4h": "H4", "1d": "D", "1w": "W",
-}
+OANDA_GRAN = {"5m": "M5", "15m": "M15", "30m": "M30", "1h": "H1"}
 TF_SETTINGS = {
-    "1m": ("1m", "5d"),
     "5m": ("5m", "5d"),
     "15m": ("15m", "5d"),
     "30m": ("30m", "1mo"),
     "1h": ("1h", "1mo"),
-    "4h": ("1h", "3mo"),
-    "1d": ("1d", "1y"),
-    "1w": ("1wk", "5y"),
 }
 
 def get_oanda_creds():
@@ -306,6 +310,21 @@ def analyze(d):
 
     return last, signal, trend
 
+def tf_signals(yahoo_symbol, oanda_instrument):
+    """Signal for every available timeframe (uses the cached fetches)."""
+    out = []
+    for tf in TF_SETTINGS:
+        try:
+            df, _, _ = fetch_data(yahoo_symbol, oanda_instrument, tf)
+            if df.empty or len(df) < 60:
+                out.append((tf, None))
+                continue
+            _, sig, _ = analyze(add_indicators(df))
+            out.append((tf, sig))
+        except Exception:
+            out.append((tf, None))
+    return out
+
 # ------------------------- CHART -------------------------
 
 def render_chart(d, side="WAIT", t0=None,
@@ -429,7 +448,7 @@ sel1, sel2, sel3 = st.columns([3, 2, 1.4])
 with sel1:
     asset_name = st.selectbox("Market", list(ASSETS.keys()))
 with sel2:
-    timeframe = st.selectbox("Timeframe", list(TF_SETTINGS.keys()), index=list(TF_SETTINGS.keys()).index("15m"))
+    timeframe = st.selectbox("Timeframe", list(TF_SETTINGS.keys()), index=0)
 with sel3:
     st.markdown("<div style='height:28px'></div>", unsafe_allow_html=True)
     if st.button("↻ Refresh", use_container_width=True):
@@ -447,11 +466,13 @@ if auto_on:
 yahoo_symbol, oanda_instrument = ASSETS[asset_name]
 
 FALLBACKS = {"XAUUSD=X": "GC=F"}  # if the spot feed is empty, use futures
+eff_yahoo, eff_oanda = yahoo_symbol, oanda_instrument
 
 with st.spinner("Loading market data..."):
     raw, source, feed_err = fetch_data(yahoo_symbol, oanda_instrument, timeframe)
     if (raw.empty or len(raw) < 60) and yahoo_symbol in FALLBACKS:
         raw, source, feed_err = fetch_data(FALLBACKS[yahoo_symbol], None, timeframe)
+        eff_yahoo, eff_oanda = FALLBACKS[yahoo_symbol], None
         if not raw.empty:
             st.info("Spot feed unavailable right now, showing Gold Futures (GC=F) instead.")
 
@@ -551,7 +572,7 @@ m1.metric("LAST PRICE", f"{price:,.4f}", delta=f"{chg_pct:+.2f}% last candle")
 m2.metric("MARKET TREND", trend)
 m3.metric("CURRENT BIAS", signal)
 
-BAR_MIN = {"1m": 1, "5m": 5, "15m": 15, "30m": 30, "1h": 60, "4h": 240, "1d": 1440, "1w": 10080}
+BAR_MIN = {"5m": 5, "15m": 15, "30m": 30, "1h": 60}
 last_ts = pd.Timestamp(data.index[-1])
 if last_ts.tzinfo is None:
     last_ts = last_ts.tz_localize("UTC")
@@ -564,9 +585,27 @@ if age_min > BAR_MIN[timeframe] * 2 + 15:
 
 st.markdown("---")
 
-# ------------------------- FEATURED TRADE SETUP -------------------------
+# ------------------------- SIGNALS BY TIMEFRAME -------------------------
 
-st.markdown("<h2 style='white-space:nowrap;font-size:clamp(18px,5vw,26px);margin:0 0 6px 0'>🎯 Trade Plan</h2>", unsafe_allow_html=True)
+st.markdown("<div class='section-title'>Signals by timeframe</div>", unsafe_allow_html=True)
+SIG_COLOR = {"BUY": "#2fbf8f", "BULLISH": "#2fbf8f", "SELL": "#e5646c",
+             "BEARISH": "#e5646c", "NEUTRAL": "#e8c76a"}
+chips = ""
+for tf_name, tf_sig in tf_signals(eff_yahoo, eff_oanda):
+    chip_color = SIG_COLOR.get(tf_sig, "#8ea0b5")
+    active = " active" if tf_name == timeframe else ""
+    chips += (
+        f"<div class='tf-chip{active}'><div class='tf-name'>{tf_name}</div>"
+        f"<div class='tf-sig' style='color:{chip_color}'>{tf_sig or '—'}</div></div>"
+    )
+st.markdown(f"<div class='tf-row'>{chips}</div>", unsafe_allow_html=True)
+st.caption("ℹ️ كل فريم (5m / 15m / 30m / 1h) عندو صفقتو الخاصة. اختار الفريم من القائمة فوق باش تشوف خطة الصفقة ديالو.")
+
+st.markdown("---")
+
+# ------------------------- TRADE PLAN -------------------------
+
+st.markdown("<div class='section-title'>Trade Plan</div>", unsafe_allow_html=True)
 
 signal_class = "buy" if signal in ("BUY", "BULLISH") else (
     "sell" if signal in ("SELL", "BEARISH") else "wait"
