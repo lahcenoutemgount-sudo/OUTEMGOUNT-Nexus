@@ -28,7 +28,7 @@ st.markdown("""
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
 html, body, [class*="css"] { font-family: Inter, sans-serif; }
 .stApp { background: #080e16; color: #e7edf5; }
-.block-container { padding-top: 1.2rem; padding-bottom: 2rem; max-width: 1600px; }
+.block-container { padding-top: 4.2rem; padding-bottom: 2rem; max-width: 1600px; }
 [data-testid="stSidebar"], [data-testid="collapsedControl"] { display: none; }
 h1,h2,h3 { color: #f0c75e !important; letter-spacing: .2px; }
 [data-testid="stMetric"] {
@@ -58,6 +58,21 @@ h1,h2,h3 { color: #f0c75e !important; letter-spacing: .2px; }
 .small-note { color:#91a2b5; font-size:12px; }
 hr { border-color:#26384b !important; }
 .stButton>button { border-radius:10px; font-weight:700; }
+footer { visibility: hidden; }
+.nexus-title { font-size: clamp(20px, 5.4vw, 32px) !important; white-space: nowrap; }
+.live-dot { display:inline-block; width:8px; height:8px; border-radius:50%;
+    background:#35c69a; box-shadow:0 0 8px #35c69a; margin-right:7px; }
+.stTabs [data-baseweb="tab-list"] { gap: 6px; }
+.stTabs [data-baseweb="tab"] { background:#0f1a26; border-radius:10px 10px 0 0; padding:8px 14px; }
+.stTabs [aria-selected="true"] { background:#182638; color:#f0c75e; }
+div[data-baseweb="select"] > div { background:#0f1a26; border-color:#2a3d52; border-radius:10px; }
+@media (max-width: 640px) {
+    .block-container { padding-left:.8rem; padding-right:.8rem; padding-top:4.6rem; }
+    .nexus-header { padding:16px 16px; border-radius:16px; }
+    .nexus-kicker { font-size:10px; letter-spacing:1.4px; }
+    [data-testid="stMetricValue"] { font-size:1.5rem !important; }
+    .trade-number { font-size:18px !important; }
+}
 </style>
 """, unsafe_allow_html=True)
 
@@ -254,7 +269,7 @@ def render_chart(d, entry=None, sl=None, tp1=None, tp2=None, tp3=None):
         "levels": [
             {"price": float(v), "color": c, "title": label, "style": style}
             for v, c, label, style in [
-                (entry, "#f0c75e", "ENTRY", 0),
+                (entry, "#b6f23a", "ENTRY", 2),
                 (sl, "#ff6b72", "STOP LOSS", 2),
                 (tp1, "#35c69a", "TP1", 2),
                 (tp2, "#35c69a", "TP2", 2),
@@ -316,7 +331,7 @@ st.markdown("""
 <div class="nexus-header">
   <div class="nexus-kicker">MARKET INTELLIGENCE · TECHNICAL ANALYSIS</div>
   <div class="nexus-title">OUTEMGOUNT MA NEXUS</div>
-  <div class="nexus-sub">Professional trading workspace</div>
+  <div class="nexus-sub"><span class="live-dot"></span>Professional trading workspace · Live market data</div>
 </div>
 """, unsafe_allow_html=True)
 
@@ -352,6 +367,8 @@ price = float(last["Close"])
 atr = float(last["ATR"])
 rsi = float(last["RSI"])
 stop_distance = atr * 1.5
+prev_close = float(data["Close"].iloc[-2])
+chg_pct = (price / prev_close - 1) * 100 if prev_close else 0.0
 
 if signal in ("BUY", "BULLISH"):
     side = "LONG"
@@ -372,7 +389,7 @@ st.markdown("---")
 # ------------------------- MARKET SNAPSHOT -------------------------
 
 m1, m2, m3 = st.columns(3)
-m1.metric("LAST PRICE", f"{price:,.4f}")
+m1.metric("LAST PRICE", f"{price:,.4f}", delta=f"{chg_pct:+.2f}% last candle")
 m2.metric("MARKET TREND", trend)
 m3.metric("CURRENT BIAS", signal)
 
@@ -399,7 +416,7 @@ if side != "WAIT":
     trade_cols = st.columns(5)
     trade_values = [
         ("DIRECTION", side, "#f0c75e"),
-        ("ENTRY PRICE", fmt(entry), "#65c7f2"),
+        ("ENTRY PRICE", fmt(entry), "#b6f23a"),
         ("STOP LOSS", fmt(sl), "#ff747c"),
         ("TAKE PROFIT 1", fmt(tp1), "#46d6a5"),
         ("TAKE PROFIT 2", fmt(tp2), "#46d6a5"),
@@ -417,7 +434,7 @@ if side != "WAIT":
         f"<div class='trade-card' style='border-color:#315b50'>"
         f"<span class='trade-label'>TAKE PROFIT 3</span><br>"
         f"<span style='color:#46d6a5;font-size:21px;font-weight:800'>{fmt(tp3)}</span>"
-        f"<span class='small-note'> &nbsp; · &nbsp; ATR stop distance: {stop_distance:.4f}</span>"
+        f"<span class='small-note'> &nbsp; · &nbsp; ATR stop distance: {stop_distance:.4f} &nbsp; · &nbsp; R/R 1:1.5 / 1:2 / 1:3</span>"
         f"</div>",
         unsafe_allow_html=True
     )
