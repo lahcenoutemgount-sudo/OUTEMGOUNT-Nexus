@@ -50,7 +50,12 @@ h1,h2,h3 { color: #f0c75e !important; letter-spacing: .2px; }
     margin: 5px 0 12px 0;
 }
 .trade-label { color:#91a5ba; font-size:11px; letter-spacing:1.2px; font-weight:700; }
-.trade-number { color:#f3f6fa; font-size:21px; font-weight:800; margin-top:3px; }
+.trade-number { color:#65c7f2; font-size:21px; font-weight:800; margin-top:3px; }
+.trade-card .trade-label { color:#a9bfd3; }
+.trade-card { box-shadow: 0 8px 24px rgba(0,0,0,.18); }
+.trade-card .buy { color:#46d6a5 !important; }
+.trade-card .sell { color:#ff747c !important; }
+
 .buy { color:#35c69a !important; font-weight:800; }
 .sell { color:#ff6b72 !important; font-weight:800; }
 .wait { color:#f0c75e !important; font-weight:800; }
@@ -226,11 +231,11 @@ def analyze(d):
 
 # ------------------------- CHART -------------------------
 
-def render_chart(d, show_ma5, show_ma13, show_ma20, show_ma50, show_kijun,
+def render_chart(d, show_kijun=True,
                  entry=None, sl=None, tp1=None, tp2=None, tp3=None):
     chart_df = d.tail(300)
     candles, volumes = [], []
-    lines = {"ma5": [], "ma13": [], "ma20": [], "ma50": [], "kijun": []}
+    lines = {"kijun": []}
 
     for ts, row in chart_df.iterrows():
         t = int(pd.Timestamp(ts).timestamp())
@@ -245,19 +250,12 @@ def render_chart(d, show_ma5, show_ma13, show_ma20, show_ma50, show_kijun,
             "color": "rgba(53,198,154,.42)" if row["Close"] >= row["Open"]
                      else "rgba(255,107,114,.42)"
         })
-        for col, key in [
-            ("MA5", "ma5"), ("MA13", "ma13"), ("MA20", "ma20"),
-            ("MA50", "ma50"), ("Kijun", "kijun")
-        ]:
-            if pd.notna(row[col]):
-                lines[key].append({"time": t, "value": float(row[col])})
+        if pd.notna(row["Kijun"]):
+            lines["kijun"].append({"time": t, "value": float(row["Kijun"])})
 
     payload = {
         "candles": candles, "volumes": volumes, **lines,
-        "visible": {
-            "ma5": show_ma5, "ma13": show_ma13, "ma20": show_ma20,
-            "ma50": show_ma50, "kijun": show_kijun
-        },
+        "visible": {"kijun": show_kijun},
         "levels": [
             {"price": float(v), "color": c, "title": label, "style": style}
             for v, c, label, style in [
@@ -304,11 +302,7 @@ def render_chart(d, show_ma5, show_ma13, show_ma20, show_ma50, show_kijun,
         });
         s.setData(d[key]);
       }
-      addLine('ma5', '#f0c75e', 'MA 5');
-      addLine('ma13', '#54a9ed', 'MA 13');
-      addLine('ma20', '#b58af3', 'MA 20');
-      addLine('ma50', '#e6edf5', 'MA 50');
-      addLine('kijun', '#ff9966', 'Kijun');
+      addLine('kijun', '#ff9966', 'Kijun Sen');
 
       const vs = chart.addSeries(LightweightCharts.HistogramSeries, {
         priceFormat: { type: 'volume' }, priceScaleId: ''
@@ -385,104 +379,103 @@ else:
     side = "WAIT"
     entry = sl = tp1 = tp2 = tp3 = None
 
-# ------------------------- TOP METRICS -------------------------
+# ------------------------- MARKET SNAPSHOT -------------------------
 
-m1, m2, m3, m4 = st.columns(4)
+m1, m2, m3 = st.columns(3)
 m1.metric("LAST PRICE", f"{price:,.4f}")
 m2.metric("MARKET TREND", trend)
-m3.metric("RSI · 14", f"{rsi:.1f}")
-m4.metric("ATR · 14", f"{atr:.4f}")
+m3.metric("CURRENT BIAS", signal)
+
+st.markdown("---")
+
+# ------------------------- FEATURED TRADE SETUP -------------------------
+
+st.markdown("## 🎯 Featured trade setup")
+
+signal_class = "buy" if signal in ("BUY", "BULLISH") else (
+    "sell" if signal in ("SELL", "BEARISH") else "wait"
+)
+st.markdown(
+    f"<div class='trade-card'>"
+    f"<div class='trade-label'>LIVE TECHNICAL SETUP · {asset_name} · {timeframe}</div>"
+    f"<div class='{signal_class}' style='font-size:30px;margin:5px 0'>{signal}</div>"
+    f"<div class='small-note'>Market direction: {trend} &nbsp; · &nbsp; "
+    f"Setup status: {'Directional setup' if side != 'WAIT' else 'Waiting for confirmation'}</div>"
+    f"</div>",
+    unsafe_allow_html=True
+)
+
+if side != "WAIT":
+    trade_cols = st.columns(5)
+    trade_values = [
+        ("DIRECTION", side, "#f0c75e"),
+        ("ENTRY PRICE", f"{entry:,.4f}", "#65c7f2"),
+        ("STOP LOSS", f"{sl:,.4f}", "#ff747c"),
+        ("TAKE PROFIT 1", f"{tp1:,.4f}", "#46d6a5"),
+        ("TAKE PROFIT 2", f"{tp2:,.4f}", "#46d6a5"),
+    ]
+    for col, (label, value, color) in zip(trade_cols, trade_values):
+        with col:
+            st.markdown(
+                f"<div class='trade-card' style='min-height:100px'>"
+                f"<div class='trade-label'>{label}</div>"
+                f"<div class='trade-number' style='color:{color};font-size:20px'>{value}</div>"
+                f"</div>",
+                unsafe_allow_html=True
+            )
+    st.markdown(
+        f"<div class='trade-card' style='border-color:#315b50'>"
+        f"<span class='trade-label'>TAKE PROFIT 3</span><br>"
+        f"<span style='color:#46d6a5;font-size:21px;font-weight:800'>{tp3:,.4f}</span>"
+        f"<span class='small-note'> &nbsp; · &nbsp; ATR stop distance: {stop_distance:.4f}</span>"
+        f"</div>",
+        unsafe_allow_html=True
+    )
+    if st.button("＋ Save setup to trade journal", type="primary", use_container_width=True):
+        add_trade(asset_name, timeframe, side, entry, sl, tp1, tp2, tp3)
+        st.success("Setup saved to your journal as Planned.")
+        st.rerun()
+else:
+    st.info("No directional setup right now. Wait for confirmation before considering a trade.")
 
 st.markdown("---")
 
 # ------------------------- TABS -------------------------
 
-tab_overview, tab_signals, tab_journal, tab_history = st.tabs([
-    "📊 Overview", "🎯 Signal setup", "📂 Trade journal", "📈 Performance"
+tab_overview, tab_journal, tab_history = st.tabs([
+    "📊 Market chart", "📂 Trade journal", "📈 Performance"
 ])
 
 with tab_overview:
-    st.subheader("Market chart")
-    chart_controls = st.columns(5)
-    with chart_controls[0]:
-        v5 = st.checkbox("MA 5", True, key="v5")
-    with chart_controls[1]:
-        v13 = st.checkbox("MA 13", True, key="v13")
-    with chart_controls[2]:
-        v20 = st.checkbox("MA 20", True, key="v20")
-    with chart_controls[3]:
-        v50 = st.checkbox("MA 50", True, key="v50")
-    with chart_controls[4]:
-        vk = st.checkbox("Kijun", True, key="vk")
-
+    st.subheader("Professional market chart")
+    vk = st.checkbox("Show Kijun Sen", True, key="vk")
     render_chart(
-        data, v5, v13, v20, v50, vk,
+        data, vk,
         entry=entry, sl=sl, tp1=tp1, tp2=tp2, tp3=tp3
     )
 
-    st.markdown("#### Indicator snapshot")
-    i1, i2, i3, i4 = st.columns(4)
-    i1.metric("MA 5", f"{last['MA5']:.4f}")
-    i2.metric("MA 13", f"{last['MA13']:.4f}")
-    i3.metric("MA 20", f"{last['MA20']:.4f}")
-    i4.metric("Kijun", f"{last['Kijun']:.4f}")
+    st.markdown("#### Ichimoku reference")
+    st.metric("Kijun Sen", f"{last['Kijun']:.4f}")
 
+    # RSI and ATR intentionally placed BELOW the trade setup and chart.
+    st.markdown("---")
+    st.markdown("#### Oscillators & volatility")
+    low1, low2, low3 = st.columns(3)
+    low1.metric("RSI · 14", f"{rsi:.1f}")
+    low2.metric("ATR · 14", f"{atr:.4f}")
+    low3.metric("ATR STOP DISTANCE · 1.5x", f"{stop_distance:.4f}")
+    st.progress(
+        min(max(rsi / 100, 0.0), 1.0),
+        text=f"RSI 14 · {rsi:.1f} · " +
+             ("Overbought zone" if rsi >= 70 else "Oversold zone" if rsi <= 30 else "Neutral zone")
+    )
+    st.caption(
+        "ATR-based levels are analytical estimates, not guaranteed execution prices."
+    )
     st.caption(
         f"Last candle: {data.index[-1]} · "
         f"Updated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
     )
-
-with tab_signals:
-    st.subheader("Current technical setup")
-
-    signal_class = "buy" if signal in ("BUY", "BULLISH") else (
-        "sell" if signal in ("SELL", "BEARISH") else "wait"
-    )
-    st.markdown(
-        f"<div class='trade-card'>"
-        f"<div class='trade-label'>CURRENT SIGNAL · {asset_name} · {timeframe}</div>"
-        f"<div class='{signal_class}' style='font-size:30px;margin:5px 0'>{signal}</div>"
-        f"<div class='small-note'>Trend: {trend} · RSI: {rsi:.1f}</div>"
-        f"</div>",
-        unsafe_allow_html=True
-    )
-
-    if side != "WAIT":
-        cols = st.columns(5)
-        values = [
-            ("DIRECTION", side, "#f0c75e"),
-            ("ENTRY", f"{entry:.4f}", "#e7edf5"),
-            ("STOP LOSS", f"{sl:.4f}", "#ff6b72"),
-            ("TAKE PROFIT 1", f"{tp1:.4f}", "#35c69a"),
-            ("TAKE PROFIT 2", f"{tp2:.4f}", "#35c69a"),
-        ]
-        for col, (label, value, color) in zip(cols, values):
-            with col:
-                st.markdown(
-                    f"<div class='trade-card'><div class='trade-label'>{label}</div>"
-                    f"<div class='trade-number' style='color:{color}'>{value}</div></div>",
-                    unsafe_allow_html=True
-                )
-        st.metric("TAKE PROFIT 3", f"{tp3:.4f}")
-
-        st.info(
-            "This is an analytical setup, not an executed trade. "
-            "Confirm the market conditions and risk before placing any order."
-        )
-
-        if st.button("＋ Save setup to trade journal", type="primary", use_container_width=True):
-            add_trade(asset_name, timeframe, side, entry, sl, tp1, tp2, tp3)
-            st.success("Setup saved to your journal as Planned.")
-            st.rerun()
-    else:
-        st.warning("No directional setup at this moment. Wait for confirmation.")
-
-    st.markdown("#### Risk manager")
-    r1, r2, r3 = st.columns(3)
-    r1.metric("ATR 14", f"{atr:.4f}")
-    r2.metric("ATR stop distance", f"{stop_distance:.4f}")
-    r3.metric("Stop multiplier", "1.5 × ATR")
-    st.caption("ATR levels are estimates, not guaranteed execution prices.")
 
 with tab_journal:
     st.subheader("Trade journal")
