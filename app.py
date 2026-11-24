@@ -59,6 +59,7 @@ h1,h2,h3 { color: #f0c75e !important; letter-spacing: .2px; }
 hr { border-color:#26384b !important; }
 .stButton>button { border-radius:10px; font-weight:700; }
 footer { visibility: hidden; }
+.nexus-header { text-align: center; }
 .nexus-title { font-size: clamp(20px, 5.4vw, 32px) !important; white-space: nowrap; }
 .live-dot { display:inline-block; width:8px; height:8px; border-radius:50%;
     background:#35c69a; box-shadow:0 0 8px #35c69a; margin-right:7px; }
@@ -246,12 +247,14 @@ def analyze(d):
 
 # ------------------------- CHART -------------------------
 
-def render_chart(d, entry=None, sl=None, tp1=None, tp2=None, tp3=None):
+def render_chart(d, side="WAIT", t0=None,
+                 entry=None, sl=None, tp1=None, tp2=None, tp3=None):
     chart_df = d.tail(300)
-    candles, volumes = [], []
+    candles, volumes, times = [], [], []
 
     for ts, row in chart_df.iterrows():
         t = int(pd.Timestamp(ts).timestamp())
+        times.append(t)
         candles.append({
             "time": t, "open": float(row["Open"]),
             "high": float(row["High"]), "low": float(row["Low"]),
@@ -264,23 +267,40 @@ def render_chart(d, entry=None, sl=None, tp1=None, tp2=None, tp3=None):
                      else "rgba(255,107,114,.42)"
         })
 
-    payload = {
-        "candles": candles, "volumes": volumes,
-        "levels": [
-            {"price": float(v), "color": c, "title": label, "style": style}
-            for v, c, label, style in [
-                (entry, "#b6f23a", "ENTRY", 2),
-                (sl, "#ff6b72", "STOP LOSS", 2),
-                (tp1, "#35c69a", "TP1", 2),
-                (tp2, "#35c69a", "TP2", 2),
-                (tp3, "#35c69a", "TP3", 2),
-            ] if v is not None and pd.notna(v)
-        ]
-    }
+    step = int(np.median(np.diff(times))) if len(times) > 1 else 900
+    t_end = times[-1] + step * 6
+    t_start = times[0]
+    marker = None
+    if t0 is not None and side != "WAIT":
+        t_start = max(int(pd.Timestamp(t0).timestamp()), times[0])
+        marker = {
+            "time": t_start,
+            "position": "belowBar" if side == "LONG" else "aboveBar",
+            "color": "#b6f23a",
+            "shape": "arrowUp" if side == "LONG" else "arrowDown",
+            "text": "MA5×13",
+        }
 
+    lines = [
+        {
+            "title": label, "color": color,
+            "data": [{"time": t_start, "value": float(v)},
+                     {"time": t_end, "value": float(v)}],
+        }
+        for v, color, label in [
+            (entry, "#b6f23a", "ENTRY"),
+            (sl, "#ff6b72", "SL"),
+            (tp1, "#35c69a", "TP1"),
+            (tp2, "#35c69a", "TP2"),
+            (tp3, "#35c69a", "TP3"),
+        ] if v is not None and pd.notna(v)
+    ]
+
+    payload = {"candles": candles, "volumes": volumes,
+               "lines": lines, "marker": marker}
     chart_json = json.dumps(payload, allow_nan=False)
     html = """
-    <div id="nexus-chart" style="width:100%;height:590px;"></div>
+    <div id="nexus-chart" style="width:100%;height:420px;"></div>
     <script src="https://unpkg.com/lightweight-charts@5.0.0/dist/lightweight-charts.standalone.production.js"></script>
     <script>
     const d = """ + chart_json + """;
@@ -289,7 +309,7 @@ def render_chart(d, entry=None, sl=None, tp1=None, tp2=None, tp3=None):
       el.innerHTML = '<div style="color:#ffb4b4;padding:20px">Chart library could not load. Check internet connection.</div>';
     } else {
       const chart = LightweightCharts.createChart(el, {
-        width: el.clientWidth, height: 590,
+        width: el.clientWidth, height: 420,
         layout: { background: { color: '#0d1722' }, textColor: '#c5d0dc' },
         grid: { vertLines: { color: '#1b2938' }, horzLines: { color: '#1b2938' } },
         crosshair: { mode: LightweightCharts.CrosshairMode.Normal },
@@ -309,12 +329,20 @@ def render_chart(d, entry=None, sl=None, tp1=None, tp2=None, tp3=None):
         priceFormat: { type: 'volume' }, priceScaleId: ''
       });
       vs.setData(d.volumes);
-      vs.priceScale().applyOptions({ scaleMargins: { top: 0.84, bottom: 0 } });
+      vs.priceScale().applyOptions({ scaleMargins: { top: 0.86, bottom: 0 } });
 
-      d.levels.forEach(x => cs.createPriceLine({
-        price: x.price, color: x.color, lineWidth: 2,
-        lineStyle: x.style, axisLabelVisible: true, title: x.title
-      }));
+      d.lines.forEach(l => {
+        const s = chart.addSeries(LightweightCharts.LineSeries, {
+          color: l.color, lineWidth: 1, lineStyle: 0, title: l.title,
+          priceLineVisible: false, lastValueVisible: true,
+          crosshairMarkerVisible: false
+        });
+        s.setData(l.data);
+      });
+
+      if (d.marker && LightweightCharts.createSeriesMarkers) {
+        LightweightCharts.createSeriesMarkers(cs, [d.marker]);
+      }
 
       chart.timeScale().fitContent();
       new ResizeObserver(entries => {
@@ -323,7 +351,7 @@ def render_chart(d, entry=None, sl=None, tp1=None, tp2=None, tp3=None):
     }
     </script>
     """
-    components.html(html, height=610, scrolling=False)
+    components.html(html, height=440, scrolling=False)
 
 # ------------------------- HEADER -------------------------
 
@@ -366,22 +394,46 @@ last, signal, trend = analyze(data)
 price = float(last["Close"])
 atr = float(last["ATR"])
 rsi = float(last["RSI"])
-stop_distance = atr * 1.5
 prev_close = float(data["Close"].iloc[-2])
 chg_pct = (price / prev_close - 1) * 100 if prev_close else 0.0
 
+# Trade levels (ATR multiples, measured from the MA5/MA13 crossover candle)
+SL_MULT = 1.2
+TP_MULTS = (1.0, 1.8, 2.6)
+
+
+def find_signal_bar(d, direction):
+    """Latest candle (last 300) where MA5 crossed MA13 in the given direction."""
+    w = d.tail(300)
+    if direction == "LONG":
+        m = (w["MA5"] > w["MA13"]) & (w["MA5"].shift(1) <= w["MA13"].shift(1))
+    else:
+        m = (w["MA5"] < w["MA13"]) & (w["MA5"].shift(1) >= w["MA13"].shift(1))
+    hits = w.index[m.fillna(False)]
+    return hits[-1] if len(hits) else w.index[-1]
+
+
 if signal in ("BUY", "BULLISH"):
     side = "LONG"
-    entry = price
-    sl = price - stop_distance
-    tp1, tp2, tp3 = price + stop_distance*1.5, price + stop_distance*2, price + stop_distance*3
 elif signal in ("SELL", "BEARISH"):
     side = "SHORT"
-    entry = price
-    sl = price + stop_distance
-    tp1, tp2, tp3 = price - stop_distance*1.5, price - stop_distance*2, price - stop_distance*3
 else:
     side = "WAIT"
+
+signal_time, candles_ago = None, None
+stop_distance = atr * SL_MULT
+if side != "WAIT":
+    signal_time = find_signal_bar(data, side)
+    pos = data.index.get_loc(signal_time)
+    sig_close = float(data["Close"].iloc[pos])
+    sig_atr = float(data["ATR"].iloc[pos])
+    candles_ago = len(data) - 1 - pos
+    dirn = 1 if side == "LONG" else -1
+    entry = sig_close
+    stop_distance = sig_atr * SL_MULT
+    sl = entry - dirn * stop_distance
+    tp1, tp2, tp3 = [entry + dirn * sig_atr * m for m in TP_MULTS]
+else:
     entry = sl = tp1 = tp2 = tp3 = None
 
 st.markdown("---")
@@ -434,7 +486,7 @@ if side != "WAIT":
         f"<div class='trade-card' style='border-color:#315b50'>"
         f"<span class='trade-label'>TAKE PROFIT 3</span><br>"
         f"<span style='color:#46d6a5;font-size:21px;font-weight:800'>{fmt(tp3)}</span>"
-        f"<span class='small-note'> &nbsp; · &nbsp; ATR stop distance: {stop_distance:.4f} &nbsp; · &nbsp; R/R 1:1.5 / 1:2 / 1:3</span>"
+        f"<span class='small-note'> &nbsp; · &nbsp; Stop distance: {stop_distance:.4f} &nbsp; · &nbsp; R/R 1:{TP_MULTS[0]/SL_MULT:.1f} / 1:{TP_MULTS[1]/SL_MULT:.1f} / 1:{TP_MULTS[2]/SL_MULT:.1f} &nbsp; · &nbsp; Signal candle: {candles_ago} candle(s) ago</span>"
         f"</div>",
         unsafe_allow_html=True
     )
@@ -455,14 +507,15 @@ tab_overview, tab_journal, tab_history = st.tabs([
 
 with tab_overview:
     st.subheader("Professional market chart")
-    render_chart(data, entry=entry, sl=sl, tp1=tp1, tp2=tp2, tp3=tp3)
+    render_chart(data, side=side, t0=signal_time,
+                 entry=entry, sl=sl, tp1=tp1, tp2=tp2, tp3=tp3)
 
     st.markdown("---")
     st.markdown("#### Oscillators & volatility")
     low1, low2, low3 = st.columns(3)
     low1.metric("RSI · 14", f"{rsi:.1f}")
     low2.metric("ATR · 14", f"{atr:.4f}")
-    low3.metric("ATR STOP DISTANCE · 1.5x", f"{stop_distance:.4f}")
+    low3.metric(f"STOP DISTANCE · {SL_MULT}x ATR", f"{stop_distance:.4f}")
     st.progress(
         min(max(rsi / 100, 0.0), 1.0),
         text=f"RSI 14 · {rsi:.1f} · " +
