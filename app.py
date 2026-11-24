@@ -144,7 +144,8 @@ init_db()
 # ------------------------- DATA -------------------------
 
 ASSETS = {
-    "XAUUSD · Gold": "GC=F",
+    "XAUUSD · Gold Spot": "XAUUSD=X",
+    "Gold Futures · GC=F": "GC=F",
     "EURUSD": "EURUSD=X",
     "BTCUSD": "BTC-USD",
     "Crude Oil": "CL=F",
@@ -161,7 +162,7 @@ TF_SETTINGS = {
     "1w": ("1wk", "5y"),
 }
 
-@st.cache_data(ttl=60)
+@st.cache_data(ttl=15)
 def fetch_data(symbol, timeframe):
     interval, period = TF_SETTINGS[timeframe]
     df = yf.download(
@@ -379,6 +380,14 @@ with sel3:
         fetch_data.clear()
         st.rerun()
 
+auto_on = st.toggle("Auto refresh (30s)", value=True)
+if auto_on:
+    try:
+        from streamlit_autorefresh import st_autorefresh
+        st_autorefresh(interval=30_000, key="nexus_auto")
+    except ImportError:
+        st.caption("Auto refresh needs the package: add `streamlit-autorefresh` to requirements.txt")
+
 symbol = ASSETS[asset_name]
 
 with st.spinner("Loading market data..."):
@@ -471,9 +480,20 @@ m1.metric("LAST PRICE", f"{price:,.4f}", delta=f"{chg_pct:+.2f}% last candle")
 m2.metric("MARKET TREND", trend)
 m3.metric("CURRENT BIAS", signal)
 
+BAR_MIN = {"1m": 1, "5m": 5, "15m": 15, "30m": 30, "1h": 60, "4h": 240, "1d": 1440, "1w": 10080}
+last_ts = pd.Timestamp(data.index[-1])
+if last_ts.tzinfo is None:
+    last_ts = last_ts.tz_localize("UTC")
+age_min = (pd.Timestamp.now(tz="UTC") - last_ts).total_seconds() / 60
+if age_min > BAR_MIN[timeframe] * 2 + 15:
+    st.warning(
+        f"Last data point is {age_min:.0f} min old. Yahoo data can be delayed "
+        f"(or the market is closed), so it may differ from your broker/MT5 price."
+    )
+
 st.markdown("---")
 
-# ------------------------- FEATURED TRADE SETUP -------------------------
+# ------------------------- TRADE PLAN -------------------------
 
 st.markdown("<h2 style='white-space:nowrap;font-size:clamp(18px,5vw,26px);margin:0 0 6px 0'>🎯 Trade Plan</h2>", unsafe_allow_html=True)
 
