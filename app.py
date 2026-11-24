@@ -168,7 +168,6 @@ TF_SETTINGS = {
     "1w": ("1wk", "5y"),
 }
 
-
 def get_oanda_creds():
     """Read optional OANDA settings from Streamlit Secrets."""
     try:
@@ -565,7 +564,7 @@ if age_min > BAR_MIN[timeframe] * 2 + 15:
 
 st.markdown("---")
 
-# ------------------------- TRADE PLAN -------------------------
+# ------------------------- FEATURED TRADE SETUP -------------------------
 
 st.markdown("<h2 style='white-space:nowrap;font-size:clamp(18px,5vw,26px);margin:0 0 6px 0'>🎯 Trade Plan</h2>", unsafe_allow_html=True)
 
@@ -658,8 +657,11 @@ tab_overview, tab_journal, tab_history = st.tabs([
 
 with tab_overview:
     st.subheader("Professional market chart")
-    render_chart(data, side=side, t0=signal_time,
-                 entry=entry, sl=sl, tp1=tp1, tp2=tp2, tp3=tp3)
+    if outcome == "SL":
+        render_chart(data)  # stop loss hit: remove the trade from the chart
+    else:
+        render_chart(data, side=side, t0=signal_time,
+                     entry=entry, sl=sl, tp1=tp1, tp2=tp2, tp3=tp3)
 
     st.markdown("---")
     st.markdown("#### Oscillators & volatility")
