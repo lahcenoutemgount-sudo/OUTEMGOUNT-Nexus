@@ -1,159 +1,147 @@
 
 import streamlit as st
+import streamlit.components.v1 as components
 import yfinance as yf
 import pandas as pd
 import numpy as np
-import plotly.graph_objects as go
-from datetime import datetime
+import json
 
-# ==========================================
-# 1. PAGE CONFIGURATION
-# ==========================================
+# =========================================================
+# 1. PAGE CONFIG
+# =========================================================
+
 st.set_page_config(
-    page_title="OUTEMGOUNT MA Nexus",
-    page_icon="📊",
-    layout="wide",
-    initial_sidebar_state="collapsed"
+    page_title="OUTEMGOUNT MA NEXUS",
+    page_icon="📈",
+    layout="wide"
 )
 
-# ==========================================
-# 2. PROFESSIONAL DESIGN
-# ==========================================
+# =========================================================
+# 2. DESIGN
+# =========================================================
+
 st.markdown("""
 <style>
 .stApp {
-    background-color: #0E1117;
+    background-color: #0b1118;
+    color: #e6edf3;
+}
+.block-container {
+    padding-top: 1.5rem;
 }
 h1, h2, h3 {
-    color: #FFD700 !important;
+    color: #f5c542 !important;
 }
-div[data-testid="stMetricValue"] {
-    color: #FFD700;
-    font-size: 24px;
-    font-weight: bold;
-}
-div[data-testid="stMetricLabel"] {
-    color: #A0AEC0;
-}
-.stDataFrame {
-    border: 1px solid #2D3748;
+div[data-testid="stMetric"] {
+    background: #151f2b;
+    border: 1px solid #293849;
+    padding: 12px;
     border-radius: 10px;
 }
-div.stButton > button {
-    background: linear-gradient(90deg,#B8860B,#FFD700);
-    color: black;
+.signal-buy {
+    color: #26a69a;
+    font-size: 25px;
     font-weight: bold;
-    border-radius: 8px;
-    border: none;
 }
-hr {
-    border-color: #2D3748;
+.signal-sell {
+    color: #ef5350;
+    font-size: 25px;
+    font-weight: bold;
+}
+.signal-neutral {
+    color: #f5c542;
+    font-size: 25px;
+    font-weight: bold;
 }
 </style>
 """, unsafe_allow_html=True)
 
-# ==========================================
+# =========================================================
 # 3. HEADER
-# ==========================================
-st.title("📊 OUTEMGOUNT MA Nexus")
-st.caption("PROFESSIONAL TRADING ANALYSIS | PHOENIX EDITION")
+# =========================================================
 
-col1, col2, col3 = st.columns([2, 2, 1])
+st.markdown(
+    "<h1 style='text-align:center;'>OUTEMGOUNT MA NEXUS</h1>",
+    unsafe_allow_html=True
+)
+st.markdown(
+    "<p style='text-align:center;color:#9baec1;'>"
+    "PROFESSIONAL TRADING DASHBOARD</p>",
+    unsafe_allow_html=True
+)
 
-symbol_map = {
-    "XAUUSD (Gold)": "GC=F",
+st.divider()
+
+# =========================================================
+# 4. MARKET SELECTION
+# =========================================================
+
+ASSETS = {
+    "XAUUSD - Gold": "GC=F",
     "EURUSD": "EURUSD=X",
-    "BTCUSD (Bitcoin)": "BTC-USD",
-    "Oil (WTI)": "CL=F",
-    "Nasdaq 100": "^IXIC"
+    "BTCUSD": "BTC-USD",
+    "Crude Oil": "CL=F",
+    "NASDAQ 100": "^NDX"
 }
 
+col1, col2, col3 = st.columns([2, 1, 1])
+
 with col1:
-    symbol = st.selectbox(
-        "Select Asset",
-        list(symbol_map.keys())
-    )
+    selected_asset = st.selectbox("Select Market", list(ASSETS.keys()))
 
 with col2:
     timeframe = st.selectbox(
-        "Select Timeframe",
-        ["15m", "1h", "4h", "1d"],
-        index=1
+        "Timeframe",
+        ["15m", "1h", "4h", "1d"]
     )
 
 with col3:
-    st.write("")
-    st.write("")
-    if st.button("🔄 Refresh Data", use_container_width=True):
-        st.cache_data.clear()
-        st.rerun()
+    refresh = st.button("🔄 Refresh Data", use_container_width=True)
 
-# ==========================================
-# 4. INDICATOR SETTINGS
-# ==========================================
-with st.expander("⚙️ Chart Settings", expanded=False):
-    c1, c2, c3, c4 = st.columns(4)
+ticker = ASSETS[selected_asset]
 
-    with c1:
-        show_ma5 = st.checkbox("MA 5", True)
-        show_ma13 = st.checkbox("MA 13", True)
+# =========================================================
+# 5. DOWNLOAD DATA
+# =========================================================
 
-    with c2:
-        show_ma20 = st.checkbox("MA 20", True)
-        show_ma50 = st.checkbox("MA 50", True)
-
-    with c3:
-        show_kijun = st.checkbox("Kijun", True)
-        show_signals = st.checkbox("BUY / SELL Signals", True)
-
-    with c4:
-        show_rsi = st.checkbox("RSI Panel", True)
-        show_atr = st.checkbox("ATR Information", True)
-
-# ==========================================
-# 5. DATA DOWNLOAD
-# ==========================================
 @st.cache_data(ttl=60)
-def get_data(sym, tf):
+def download_data(symbol, tf):
 
-    if tf == "15m":
-        period = "5d"
-        interval = "15m"
+    settings = {
+        "15m": ("15m", "5d"),
+        "1h": ("1h", "1mo"),
+        "4h": ("1h", "3mo"),
+        "1d": ("1d", "1y")
+    }
 
-    elif tf == "1h":
-        period = "3mo"
-        interval = "1h"
-
-    elif tf == "4h":
-        period = "6mo"
-        interval = "1h"
-
-    else:
-        period = "2y"
-        interval = "1d"
+    interval, period = settings[tf]
 
     df = yf.download(
-        sym,
+        symbol,
         period=period,
         interval=interval,
         auto_adjust=False,
         progress=False
     )
 
-    if df.empty:
+    if df is None or df.empty:
         return pd.DataFrame()
 
     if isinstance(df.columns, pd.MultiIndex):
-        for level in range(df.columns.nlevels):
-            values = df.columns.get_level_values(level)
-            if "Open" in values and "Close" in values:
-                df.columns = values
-                break
+        df.columns = df.columns.get_level_values(0)
+
+    df = df.loc[:, ~df.columns.duplicated()]
 
     required = ["Open", "High", "Low", "Close"]
 
-    if not all(col in df.columns for col in required):
+    if not all(c in df.columns for c in required):
         return pd.DataFrame()
+
+    if "Volume" not in df.columns:
+        df["Volume"] = 0
+
+    df = df[["Open", "High", "Low", "Close", "Volume"]]
+    df = df.dropna(subset=required)
 
     if tf == "4h":
         df = df.resample("4h").agg({
@@ -162,449 +150,527 @@ def get_data(sym, tf):
             "Low": "min",
             "Close": "last",
             "Volume": "sum"
-        } if "Volume" in df.columns else {
-            "Open": "first",
-            "High": "max",
-            "Low": "min",
-            "Close": "last"
-        })
-
-    for col in required:
-        df[col] = pd.to_numeric(df[col], errors="coerce")
-
-    return df.dropna(subset=required)
-
-
-# ==========================================
-# 6. CALCULATE INDICATORS
-# ==========================================
-def calculate_indicators(df):
-
-    df = df.copy()
-
-    df["MA5"] = df["Close"].rolling(5).mean()
-    df["MA13"] = df["Close"].rolling(13).mean()
-    df["MA20"] = df["Close"].rolling(20).mean()
-    df["MA50"] = df["Close"].rolling(50).mean()
-
-    # RSI 14
-    delta = df["Close"].diff()
-
-    gain = delta.clip(lower=0).rolling(14).mean()
-    loss = (-delta.clip(upper=0)).rolling(14).mean()
-
-    rs = gain / loss.replace(0, np.nan)
-
-    df["RSI"] = 100 - (100 / (1 + rs))
-
-    df.loc[(loss == 0) & (gain > 0), "RSI"] = 100
-    df.loc[(loss == 0) & (gain == 0), "RSI"] = 50
-
-    # ATR 14
-    high_low = df["High"] - df["Low"]
-
-    high_close = abs(
-        df["High"] - df["Close"].shift(1)
-    )
-
-    low_close = abs(
-        df["Low"] - df["Close"].shift(1)
-    )
-
-    df["TR"] = pd.concat(
-        [high_low, high_close, low_close],
-        axis=1
-    ).max(axis=1)
-
-    df["ATR"] = df["TR"].rolling(14).mean()
-
-    # KIJUN
-    df["Kijun_High"] = df["High"].rolling(26).max()
-    df["Kijun_Low"] = df["Low"].rolling(26).min()
-
-    df["Kijun"] = (
-        df["Kijun_High"] + df["Kijun_Low"]
-    ) / 2
-
-    # MA CROSSOVER
-    df["Crossover"] = np.where(
-        df["MA5"] > df["MA13"], 1, -1
-    )
-
-    df["Signal"] = df["Crossover"].diff()
+        }).dropna(subset=required)
 
     return df
 
 
-# ==========================================
-# 7. MAIN ANALYSIS
-# ==========================================
-try:
-    actual_symbol = symbol_map[symbol]
-    data = get_data(actual_symbol, timeframe)
+if refresh:
+    download_data.clear()
 
-    if data.empty or len(data) < 55:
-        st.error(
-            "Not enough market data. Please try another timeframe."
+with st.spinner("Loading market data..."):
+    data = download_data(ticker, timeframe)
+
+if data.empty or len(data) < 55:
+    st.error("Market data unavailable. Try another timeframe or refresh.")
+    st.stop()
+
+# =========================================================
+# 6. INDICATORS
+# =========================================================
+
+data = data.copy()
+
+data["MA5"] = data["Close"].rolling(5).mean()
+data["MA13"] = data["Close"].rolling(13).mean()
+data["MA20"] = data["Close"].rolling(20).mean()
+data["MA50"] = data["Close"].rolling(50).mean()
+
+# RSI 14
+delta = data["Close"].diff()
+gain = delta.clip(lower=0)
+loss = -delta.clip(upper=0)
+
+avg_gain = gain.ewm(
+    alpha=1/14, min_periods=14, adjust=False
+).mean()
+
+avg_loss = loss.ewm(
+    alpha=1/14, min_periods=14, adjust=False
+).mean()
+
+rs = avg_gain / avg_loss.replace(0, np.nan)
+data["RSI"] = (100 - (100 / (1 + rs))).fillna(50)
+
+# ATR 14
+previous_close = data["Close"].shift(1)
+
+tr = pd.concat([
+    data["High"] - data["Low"],
+    (data["High"] - previous_close).abs(),
+    (data["Low"] - previous_close).abs()
+], axis=1).max(axis=1)
+
+data["ATR"] = tr.ewm(
+    alpha=1/14, min_periods=14, adjust=False
+).mean()
+
+# Kijun 26
+data["Kijun"] = (
+    data["High"].rolling(26).max()
+    + data["Low"].rolling(26).min()
+) / 2
+
+data = data.dropna(
+    subset=["MA5", "MA13", "MA20", "MA50", "ATR", "Kijun"]
+)
+
+if data.empty:
+    st.error("Not enough data for indicators.")
+    st.stop()
+
+# =========================================================
+# 7. MARKET ANALYSIS
+# =========================================================
+
+last = data.iloc[-1]
+previous = data.iloc[-2]
+
+price = float(last["Close"])
+atr = float(last["ATR"])
+rsi = float(last["RSI"])
+
+bullish_cross = (
+    previous["MA5"] <= previous["MA13"]
+    and last["MA5"] > last["MA13"]
+)
+
+bearish_cross = (
+    previous["MA5"] >= previous["MA13"]
+    and last["MA5"] < last["MA13"]
+)
+
+if bullish_cross:
+    signal = "BUY"
+elif bearish_cross:
+    signal = "SELL"
+elif last["MA5"] > last["MA13"] and price > last["MA20"]:
+    signal = "BULLISH"
+elif last["MA5"] < last["MA13"] and price < last["MA20"]:
+    signal = "BEARISH"
+else:
+    signal = "NEUTRAL"
+
+if (
+    last["MA5"] > last["MA13"]
+    and last["MA13"] > last["MA20"]
+    and price > last["MA50"]
+):
+    trend = "STRONG UPTREND"
+elif (
+    last["MA5"] < last["MA13"]
+    and last["MA13"] < last["MA20"]
+    and price < last["MA50"]
+):
+    trend = "STRONG DOWNTREND"
+elif last["MA5"] > last["MA13"]:
+    trend = "BULLISH"
+elif last["MA5"] < last["MA13"]:
+    trend = "BEARISH"
+else:
+    trend = "SIDEWAYS"
+
+# =========================================================
+# 8. RISK MANAGEMENT
+# =========================================================
+
+atr_multiplier = 1.5
+risk_distance = atr * atr_multiplier
+
+if signal in ["BUY", "BULLISH"]:
+    direction = "LONG"
+    entry = price
+    stop_loss = entry - risk_distance
+    tp1 = entry + risk_distance * 1.5
+    tp2 = entry + risk_distance * 2
+    tp3 = entry + risk_distance * 3
+
+elif signal in ["SELL", "BEARISH"]:
+    direction = "SHORT"
+    entry = price
+    stop_loss = entry + risk_distance
+    tp1 = entry - risk_distance * 1.5
+    tp2 = entry - risk_distance * 2
+    tp3 = entry - risk_distance * 3
+
+else:
+    direction = "WAIT"
+    entry = price
+    stop_loss = None
+    tp1 = None
+    tp2 = None
+    tp3 = None
+
+# =========================================================
+# 9. MARKET OVERVIEW
+# =========================================================
+
+st.subheader("📊 MARKET OVERVIEW")
+
+c1, c2, c3, c4 = st.columns(4)
+
+c1.metric("Market Price", f"{price:,.4f}")
+c2.metric("Trend", trend)
+c3.metric("RSI 14", f"{rsi:.2f}")
+c4.metric("ATR 14", f"{atr:.4f}")
+
+st.divider()
+
+# =========================================================
+# 10. SIGNAL
+# =========================================================
+
+st.subheader("🎯 TRADING SIGNAL")
+
+s1, s2, s3 = st.columns(3)
+
+with s1:
+    if signal in ["BUY", "BULLISH"]:
+        st.markdown(
+            f"<div class='signal-buy'>{signal}</div>",
+            unsafe_allow_html=True
         )
-        st.stop()
-
-    data = calculate_indicators(data)
-
-    # Last CLOSED candle
-    last_closed = -2
-
-    current_price = float(
-        data["Close"].iloc[last_closed]
-    )
-
-    current_atr = float(
-        data["ATR"].iloc[last_closed]
-    )
-
-    current_kijun = float(
-        data["Kijun"].iloc[last_closed]
-    )
-
-    current_ma20 = float(
-        data["MA20"].iloc[last_closed]
-    )
-
-    current_rsi = float(
-        data["RSI"].iloc[last_closed]
-    )
-
-    if not np.isfinite(current_atr) or current_atr <= 0:
-        st.error("ATR data is not available.")
-        st.stop()
-
-    latest_signal = data["Signal"].iloc[last_closed]
-
-    # ======================================
-    # 8. MARKET TREND
-    # ======================================
-    st.subheader("🌍 Market Trend | اتجاه السوق")
-
-    if current_price > current_kijun and current_price > current_ma20:
-        trend = "UPTREND 🚀"
-        st.success("UPTREND | اتجاه صاعد")
-
-    elif current_price < current_kijun and current_price < current_ma20:
-        trend = "DOWNTREND 📉"
-        st.error("DOWNTREND | اتجاه هابط")
-
+    elif signal in ["SELL", "BEARISH"]:
+        st.markdown(
+            f"<div class='signal-sell'>{signal}</div>",
+            unsafe_allow_html=True
+        )
     else:
-        trend = "RANGE ↔️"
-        st.warning("RANGE | اتجاه عرضي")
-
-    # ======================================
-    # 9. TRADING SIGNALS
-    # ======================================
-    st.subheader("🎯 Trading Signals")
-
-    if latest_signal == 2:
-        signal_name = "BUY"
-        st.success(f"🟢 BUY SIGNAL | إشارة شراء - {timeframe}")
-
-    elif latest_signal == -2:
-        signal_name = "SELL"
-        st.error(f"🔴 SELL SIGNAL | إشارة بيع - {timeframe}")
-
-    else:
-        signal_name = "WAIT"
-        st.info("⏳ WAIT | لا توجد إشارة جديدة")
-
-    # ======================================
-    # 10. ENTRY / SL / TP
-    # ======================================
-    st.subheader("💰 Trade Management")
-
-    risk = current_atr * 1.5
-    entry = current_price
-
-    if signal_name == "BUY":
-
-        sl = entry - risk
-        tp1 = entry + risk * 1.5
-        tp2 = entry + risk * 3
-
-    elif signal_name == "SELL":
-
-        sl = entry + risk
-        tp1 = entry - risk * 1.5
-        tp2 = entry - risk * 3
-
-    else:
-        sl = np.nan
-        tp1 = np.nan
-        tp2 = np.nan
-
-    if signal_name in ["BUY", "SELL"]:
-
-        a, b, c, d = st.columns(4)
-
-        a.metric("ENTRY", f"{entry:.2f}")
-        b.metric("STOP LOSS", f"{sl:.2f}")
-        c.metric("TARGET 1", f"{tp1:.2f}")
-        d.metric("TARGET 2", f"{tp2:.2f}")
-
-    else:
-        st.info("No active trade levels.")
-
-    # ======================================
-    # 11. MARKET METRICS
-    # ======================================
-    st.subheader("📈 Market Dashboard")
-
-    a, b, c, d = st.columns(4)
-
-    a.metric(
-        "Market Price",
-        f"{current_price:.2f}"
-    )
-
-    b.metric(
-        "RSI 14",
-        f"{current_rsi:.1f}"
-    )
-
-    c.metric(
-        "ATR 14",
-        f"{current_atr:.4f}"
-    )
-
-    d.metric(
-        "Trend",
-        trend
-    )
-
-    # RSI STATUS
-    if current_rsi >= 70:
-        st.warning("RSI: Overbought | تشبع شرائي")
-
-    elif current_rsi <= 30:
-        st.warning("RSI: Oversold | تشبع بيعي")
-
-    else:
-        st.info("RSI: Neutral Zone | منطقة محايدة")
-
-    # ======================================
-    # 12. PROFESSIONAL CANDLESTICK CHART
-    # ======================================
-    st.subheader("🕯️ Professional Price Chart")
-
-    chart_data = data.tail(100)
-
-    fig = go.Figure()
-
-    fig.add_trace(go.Candlestick(
-        x=chart_data.index,
-        open=chart_data["Open"],
-        high=chart_data["High"],
-        low=chart_data["Low"],
-        close=chart_data["Close"],
-        name="Price",
-        increasing_line_color="#00FF00",
-        decreasing_line_color="#FF0000"
-    ))
-
-    # MOVING AVERAGES
-    ma_settings = [
-        ("MA5", show_ma5, "#FFD700"),
-        ("MA13", show_ma13, "#00FFFF"),
-        ("MA20", show_ma20, "#FF8C00"),
-        ("MA50", show_ma50, "#FF00FF"),
-        ("Kijun", show_kijun, "#FFFFFF")
-    ]
-
-    for name, visible, color in ma_settings:
-
-        if visible:
-            fig.add_trace(go.Scatter(
-                x=chart_data.index,
-                y=chart_data[name],
-                name=name,
-                mode="lines",
-                line=dict(
-                    color=color,
-                    width=1.5
-                )
-            ))
-
-    # BUY / SELL MARKERS
-    if show_signals:
-
-        buy_points = chart_data[
-            chart_data["Signal"] == 2
-        ]
-
-        sell_points = chart_data[
-            chart_data["Signal"] == -2
-        ]
-
-        fig.add_trace(go.Scatter(
-            x=buy_points.index,
-            y=buy_points["Low"],
-            mode="markers+text",
-            name="BUY",
-            text=["BUY"] * len(buy_points),
-            textposition="bottom center",
-            marker=dict(
-                symbol="triangle-up",
-                size=12,
-                color="#00FF00"
-            )
-        ))
-
-        fig.add_trace(go.Scatter(
-            x=sell_points.index,
-            y=sell_points["High"],
-            mode="markers+text",
-            name="SELL",
-            text=["SELL"] * len(sell_points),
-            textposition="top center",
-            marker=dict(
-                symbol="triangle-down",
-                size=12,
-                color="#FF0000"
-            )
-        ))
-
-    # ENTRY / SL / TP LINES
-    if signal_name in ["BUY", "SELL"]:
-
-        for value, label, color in [
-            (entry, "ENTRY", "#FFD700"),
-            (sl, "STOP LOSS", "#FF0000"),
-            (tp1, "TP1", "#00FF00"),
-            (tp2, "TP2", "#00FFFF")
-        ]:
-
-            fig.add_hline(
-                y=value,
-                line_dash="dash",
-                line_color=color,
-                annotation_text=label,
-                annotation_position="top right"
-            )
-
-    fig.update_layout(
-        template="plotly_dark",
-        xaxis_rangeslider_visible=False,
-        height=550,
-        paper_bgcolor="#0E1117",
-        plot_bgcolor="#0E1117",
-        margin=dict(l=10, r=10, t=30, b=10),
-        legend=dict(
-            orientation="h",
-            yanchor="bottom",
-            y=1.02,
-            xanchor="left",
-            x=0
-        )
-    )
-
-    st.plotly_chart(
-        fig,
-        use_container_width=True
-    )
-
-    # ======================================
-    # 13. RSI CHART
-    # ======================================
-    if show_rsi:
-
-        st.subheader("📊 RSI Analysis")
-
-        rsi_fig = go.Figure()
-
-        rsi_fig.add_trace(go.Scatter(
-            x=chart_data.index,
-            y=chart_data["RSI"],
-            name="RSI 14",
-            line=dict(
-                color="#FFD700",
-                width=2
-            )
-        ))
-
-        rsi_fig.add_hline(
-            y=70,
-            line_dash="dash",
-            line_color="red"
+        st.markdown(
+            "<div class='signal-neutral'>NEUTRAL</div>",
+            unsafe_allow_html=True
         )
 
-        rsi_fig.add_hline(
-            y=30,
-            line_dash="dash",
-            line_color="green"
+with s2:
+    st.metric("Direction", direction)
+
+with s3:
+    st.metric("Kijun", f"{last['Kijun']:,.4f}")
+
+st.divider()
+
+# =========================================================
+# 11. RISK MANAGER
+# =========================================================
+
+st.subheader("🛡️ PHOENIX RISK MANAGER")
+
+r1, r2, r3 = st.columns(3)
+
+r1.metric("ATR 14", f"{atr:.4f}")
+r2.metric("Stop Distance", f"{risk_distance:.4f}")
+r3.metric("ATR Multiplier", f"{atr_multiplier:.1f}x")
+
+if direction != "WAIT":
+
+    a, b, c = st.columns(3)
+
+    a.metric("ENTRY", f"{entry:.4f}")
+    b.metric("STOP LOSS", f"{stop_loss:.4f}")
+    c.metric("TAKE PROFIT 1", f"{tp1:.4f}")
+
+    a, b = st.columns(2)
+
+    a.metric("TAKE PROFIT 2", f"{tp2:.4f}")
+    b.metric("TAKE PROFIT 3", f"{tp3:.4f}")
+
+else:
+    st.info("No directional setup. Wait for confirmation.")
+
+st.caption(
+    "ATR-based levels are analytical estimates, not guaranteed execution prices."
+)
+
+st.divider()
+
+# =========================================================
+# 12. BROKER STYLE CHART
+# =========================================================
+
+st.subheader("📈 PROFESSIONAL BROKER CHART")
+
+v1, v2, v3, v4, v5 = st.columns(5)
+
+with v1:
+    show_ma5 = st.checkbox("MA 5", True)
+with v2:
+    show_ma13 = st.checkbox("MA 13", True)
+with v3:
+    show_ma20 = st.checkbox("MA 20", True)
+with v4:
+    show_ma50 = st.checkbox("MA 50", True)
+with v5:
+    show_kijun = st.checkbox("Kijun", True)
+
+chart_data = data.tail(300).copy()
+
+candles = []
+volumes = []
+ma5 = []
+ma13 = []
+ma20 = []
+ma50 = []
+kijun = []
+
+for timestamp, row in chart_data.iterrows():
+
+    t = int(timestamp.timestamp())
+
+    candles.append({
+        "time": t,
+        "open": float(row["Open"]),
+        "high": float(row["High"]),
+        "low": float(row["Low"]),
+        "close": float(row["Close"])
+    })
+
+    volume_value = row["Volume"]
+    if pd.isna(volume_value):
+        volume_value = 0
+
+    volumes.append({
+        "time": t,
+        "value": float(volume_value),
+        "color": (
+            "rgba(38,166,154,0.45)"
+            if row["Close"] >= row["Open"]
+            else "rgba(239,83,80,0.45)"
         )
+    })
 
-        rsi_fig.add_hline(
-            y=50,
-            line_dash="dot",
-            line_color="gray"
-        )
+    for column, target in [
+        ("MA5", ma5),
+        ("MA13", ma13),
+        ("MA20", ma20),
+        ("MA50", ma50),
+        ("Kijun", kijun)
+    ]:
+        value = row[column]
+        if not pd.isna(value):
+            target.append({
+                "time": t,
+                "value": float(value)
+            })
 
-        rsi_fig.update_layout(
-            template="plotly_dark",
-            height=220,
-            yaxis=dict(
-                range=[0, 100]
-            ),
-            paper_bgcolor="#0E1117",
-            plot_bgcolor="#0E1117"
-        )
+chart_payload = {
+    "candles": candles,
+    "volumes": volumes,
+    "ma5": ma5,
+    "ma13": ma13,
+    "ma20": ma20,
+    "ma50": ma50,
+    "kijun": kijun,
+    "show_ma5": show_ma5,
+    "show_ma13": show_ma13,
+    "show_ma20": show_ma20,
+    "show_ma50": show_ma50,
+    "show_kijun": show_kijun,
+    "entry": entry if direction != "WAIT" else None,
+    "sl": stop_loss,
+    "tp1": tp1,
+    "tp2": tp2,
+    "tp3": tp3
+}
 
-        st.plotly_chart(
-            rsi_fig,
-            use_container_width=True
-        )
+chart_json = json.dumps(chart_payload, allow_nan=False)
 
-    # ======================================
-    # 14. ATR INFORMATION
-    # ======================================
-    if show_atr:
+html = """
+<div id="broker-chart" style="width:100%;height:620px;"></div>
 
-        st.subheader("🛡️ Risk Management")
+<script src="https://unpkg.com/lightweight-charts/dist/lightweight-charts.standalone.production.js"></script>
 
-        st.write(
-            f"ATR 14: {current_atr:.4f}"
-        )
+<script>
+const data = """ + chart_json + """;
 
-        st.write(
-            f"Suggested ATR Stop Distance: {risk:.4f}"
-        )
+const container = document.getElementById('broker-chart');
 
-        st.caption(
-            "ATR-based levels are analytical estimates, "
-            "not guaranteed execution prices."
-        )
+const chart = LightweightCharts.createChart(container, {
+    width: container.clientWidth,
+    height: 620,
 
-    # ======================================
-    # 15. DATA INFORMATION
-    # ======================================
-    st.divider()
+    layout: {
+        background: { color: '#101820' },
+        textColor: '#d1d4dc'
+    },
 
-    st.caption(
-        f"Asset: {symbol} | "
-        f"Timeframe: {timeframe} | "
-        f"Last candle: {data.index[last_closed]} | "
-        f"Updated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
-    )
+    grid: {
+        vertLines: { color: '#202b38' },
+        horzLines: { color: '#202b38' }
+    },
 
-    st.caption(
-        "OUTEMGOUNT MA Nexus | Professional Trading Dashboard"
-    )
+    crosshair: {
+        mode: LightweightCharts.CrosshairMode.Normal
+    },
 
-except Exception as e:
+    rightPriceScale: {
+        borderColor: '#485465'
+    },
 
-    st.error(
-        "An unexpected error occurred while loading market data."
-    )
+    timeScale: {
+        borderColor: '#485465',
+        timeVisible: true,
+        secondsVisible: false
+    },
 
-    st.exception(e)
+    handleScroll: true,
+    handleScale: true
+});
 
-    st.info(
-        "Please refresh the application or try another asset."
-    )
+// CANDLESTICKS
+const candleSeries = chart.addSeries(
+    LightweightCharts.CandlestickSeries,
+    {
+        upColor: '#26a69a',
+        downColor: '#ef5350',
+        borderUpColor: '#26a69a',
+        borderDownColor: '#ef5350',
+        wickUpColor: '#26a69a',
+        wickDownColor: '#ef5350'
+    }
+);
+
+candleSeries.setData(data.candles);
+
+// MOVING AVERAGES
+function addMA(values, color, title, visible) {
+
+    const line = chart.addSeries(
+        LightweightCharts.LineSeries,
+        {
+            color: color,
+            lineWidth: 2,
+            title: title,
+            priceLineVisible: false,
+            lastValueVisible: true,
+            visible: visible
+        }
+    );
+
+    line.setData(values);
+}
+
+addMA(data.ma5, '#f5c542', 'MA 5', data.show_ma5);
+addMA(data.ma13, '#42a5f5', 'MA 13', data.show_ma13);
+addMA(data.ma20, '#ab47bc', 'MA 20', data.show_ma20);
+addMA(data.ma50, '#eeeeee', 'MA 50', data.show_ma50);
+addMA(data.kijun, '#ff8a65', 'Kijun', data.show_kijun);
+
+// VOLUME
+const volumeSeries = chart.addSeries(
+    LightweightCharts.HistogramSeries,
+    {
+        priceFormat: { type: 'volume' },
+        priceScaleId: ''
+    }
+);
+
+volumeSeries.setData(data.volumes);
+
+volumeSeries.priceScale().applyOptions({
+    scaleMargins: {
+        top: 0.82,
+        bottom: 0
+    }
+});
+
+// ENTRY / SL / TP LINES
+function addLevel(value, color, title, style) {
+
+    if (value !== null && value !== undefined) {
+
+        candleSeries.createPriceLine({
+            price: value,
+            color: color,
+            lineWidth: 2,
+            lineStyle: style,
+            axisLabelVisible: true,
+            title: title
+        });
+    }
+}
+
+addLevel(data.entry, '#f5c542', 'ENTRY', 0);
+addLevel(data.sl, '#ef5350', 'STOP LOSS', 2);
+addLevel(data.tp1, '#26a69a', 'TP 1', 2);
+addLevel(data.tp2, '#26a69a', 'TP 2', 2);
+addLevel(data.tp3, '#26a69a', 'TP 3', 2);
+
+// FIT CHART
+chart.timeScale().fitContent();
+
+// RESPONSIVE WIDTH
+const resizeObserver = new ResizeObserver(entries => {
+    if (entries.length > 0) {
+        chart.applyOptions({
+            width: entries[0].contentRect.width
+        });
+    }
+});
+
+resizeObserver.observe(container);
+</script>
+"""
+
+components.html(
+    html,
+    height=640,
+    scrolling=False
+)
+
+st.caption(
+    "Chart powered by TradingView Lightweight Charts. "
+    "Market data supplied by Yahoo Finance."
+)
+
+st.divider()
+
+# =========================================================
+# 13. RSI PANEL
+# =========================================================
+
+st.subheader("📉 RSI ANALYSIS")
+
+rsi_status = (
+    "OVERBOUGHT" if rsi >= 70
+    else "OVERSOLD" if rsi <= 30
+    else "NEUTRAL"
+)
+
+rc1, rc2 = st.columns(2)
+
+rc1.metric("RSI 14", f"{rsi:.2f}")
+rc2.metric("RSI Condition", rsi_status)
+
+st.progress(
+    min(max(rsi / 100, 0.0), 1.0),
+    text=f"RSI: {rsi:.2f}"
+)
+
+st.caption(
+    "RSI above 70 may indicate overbought conditions; "
+    "below 30 may indicate oversold conditions."
+)
+
+st.divider()
+
+# =========================================================
+# 14. MARKET INFORMATION
+# =========================================================
+
+st.subheader("ℹ️ MARKET INFORMATION")
+
+info1, info2 = st.columns(2)
+
+with info1:
+    st.write("**Asset:**", selected_asset)
+    st.write("**Timeframe:**", timeframe)
+    st.write("**Data Source:** Yahoo Finance")
+
+with info2:
+    st.write("**Last Candle:**", str(data.index[-1]))
+    st.write("**Last Update:**", str(pd.Timestamp.now()))
+
+st.caption(
+    "OUTEMGOUNT MA NEXUS | Analytical dashboard only. "
+    "Signals and risk levels are estimates, not financial advice."
+)
