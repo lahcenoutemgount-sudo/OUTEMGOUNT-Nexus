@@ -416,6 +416,27 @@ def find_signal_bar(d, direction):
     return hits[-1] if len(hits) else w.index[-1]
 
 
+def evaluate_trade(d, pos, direction, stop, targets):
+    """Scan candles after the signal candle.
+    Returns "SL" if the stop is hit before TP1, else the highest TP reached (0-3)."""
+    hit = 0
+    for i in range(pos + 1, len(d)):
+        hi, lo = float(d["High"].iloc[i]), float(d["Low"].iloc[i])
+        if direction == "LONG":
+            if hit == 0 and lo <= stop:
+                return "SL"
+            for k, tp in enumerate(targets, 1):
+                if k > hit and hi >= tp:
+                    hit = k
+        else:
+            if hit == 0 and hi >= stop:
+                return "SL"
+            for k, tp in enumerate(targets, 1):
+                if k > hit and lo <= tp:
+                    hit = k
+    return hit
+
+
 if signal in ("BUY", "BULLISH"):
     side = "LONG"
 elif signal in ("SELL", "BEARISH"):
@@ -436,8 +457,10 @@ if side != "WAIT":
     stop_distance = sig_atr * SL_MULT
     sl = entry - dirn * stop_distance
     tp1, tp2, tp3 = [entry + dirn * sig_atr * m for m in TP_MULTS]
+    outcome = evaluate_trade(data, pos, side, sl, (tp1, tp2, tp3))
 else:
     entry = sl = tp1 = tp2 = tp3 = None
+    outcome = None
 
 st.markdown("---")
 
@@ -493,6 +516,39 @@ if side != "WAIT":
         f"</div>",
         unsafe_allow_html=True
     )
+    ALERTS = {
+        1: ("TP1 HIT ✓", "#46d6a5", "احجز الأرباح وأمّن الصفقة",
+            "مهم جداً: حجز جزء من الأرباح عند TP1 وتأمين الصفقة بتحريك وقف الخسارة إلى نقطة الدخول، وفق خطة التداول.",
+            "إعادة الدخول المحتملة",
+            "إذا رجع السعر إلى منطقة ENTRY، راجع شروط الدخول من جديد قبل اتخاذ القرار."),
+        2: ("TP2 HIT ✓", "#46d6a5", "الهدف الثاني تحقق",
+            "واصل تأمين الصفقة: أبقِ وقف الخسارة عند الدخول أو أعلى، واحجز جزءاً آخر من الأرباح حسب خطتك.",
+            "إعادة الدخول المحتملة",
+            "إذا رجع السعر إلى منطقة ENTRY، راجع شروط الدخول من جديد قبل اتخاذ القرار."),
+        3: ("TP3 HIT ✓", "#46d6a5", "الهدف الأخير تحقق",
+            "أغلق ما تبقّى من الصفقة وسجّل النتيجة في دفتر الصفقات.",
+            "إعادة الدخول المحتملة",
+            "انتظر إشارة جديدة وراجع شروط الدخول قبل اتخاذ أي قرار."),
+        "SL": ("SL HIT ✗", "#ff747c", "تم ضرب وقف الخسارة",
+               "الصفقة انتهت بخسارة محسوبة وفق الخطة. لا تعوّضها بصفقة عاطفية.",
+               "إعادة الدخول المحتملة",
+               "انتظر إشارة جديدة وراجع شروط الدخول من جديد قبل اتخاذ القرار."),
+    }
+    if outcome in ALERTS:
+        a_title, a_color, a_head, a_body, a_sub, a_sub_body = ALERTS[outcome]
+        st.markdown(
+            f"<div class='trade-card' style='border-color:{a_color};direction:rtl;text-align:right'>"
+            f"<div style='color:{a_color};font-size:24px;font-weight:800;direction:ltr;text-align:left'>{a_title}</div>"
+            f"<div style='color:#f0c75e;font-size:17px;font-weight:800;margin:8px 0 4px'>{a_head}</div>"
+            f"<div style='color:#d5dfea;font-size:14px;line-height:1.7'>{a_body}</div>"
+            f"<div style='color:#f0c75e;font-size:15px;font-weight:800;margin:12px 0 4px'>{a_sub}</div>"
+            f"<div style='color:#d5dfea;font-size:14px;line-height:1.7'>{a_sub_body}</div>"
+            f"<div class='small-note' style='margin-top:10px'>التنبيه يظهر حسب تحقق شروط السعر، وليس بمجرد ظهور الإشارة.</div>"
+            f"</div>",
+            unsafe_allow_html=True
+        )
+    else:
+        st.caption("لم يتحقق أي هدف بعد · التنبيه يظهر حسب تحقق شروط السعر، وليس بمجرد ظهور الإشارة.")
     if st.button("＋ Save setup to trade journal", type="primary", use_container_width=True):
         add_trade(asset_name, timeframe, side, entry, sl, tp1, tp2, tp3)
         st.success("Setup saved to your journal as Planned.")
